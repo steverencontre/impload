@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -226,12 +226,26 @@ void MainWindow::on_wImportDetails_cellChanged (int row, int column)
 
 
 /*
+	FileCount
+*/
+
+void MainWindow::FileCount (unsigned nfiles)
+  {
+	ui->wProgressBar->setMinimum (0);
+	ui->wProgressBar->setMaximum ((int) nfiles);
+	ui->wProgressBar->setValue (0);
+  }
+
+
+
+/*
 	NewThumbnail
 */
 
-void MainWindow::NewThumbnail (const char *name, const void *data, unsigned size)
+void MainWindow::NewThumbnail (unsigned index, const char *name, const void *data, unsigned size)
   {
 	ui->wImagePreview->Add (name, data, size);
+	ui->wProgressBar->setValue ((int) index + 1);
 	m_Loader.Continue();
   }
 
@@ -240,13 +254,21 @@ void MainWindow::NewThumbnail (const char *name, const void *data, unsigned size
 	ThumbnailsDone
 */
 
-void MainWindow::ThumbnailsDone (unsigned nfiles)
+void MainWindow::ThumbnailsDone()
   {
-	ui->wProgressBar->setMinimum (0);
-	ui->wProgressBar->setMaximum ((int) nfiles);
+	ui->buttonBox->setEnabled (true);
+  }
+
+
+/*
+	SaveAll
+*/
+
+void MainWindow::SaveAll()
+  {
 	ui->wProgressBar->setValue (0);
 
-	ui->buttonBox->setEnabled (true);
+	emit sig_SaveAll (m_CameraInfo->prefix.toUtf8().data(), m_BaseFolder.toUtf8().data());
   }
 
 
@@ -257,7 +279,7 @@ void MainWindow::ThumbnailsDone (unsigned nfiles)
 void MainWindow::Saved (unsigned index, bool ok)
   {
 	ui->wImagePreview->Saved (index, ok);
-	ui->wProgressBar->setValue ((int) index);
+	ui->wProgressBar->setValue ((int) index + 1);
   }
 
 

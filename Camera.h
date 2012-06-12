@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
 
 	This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -161,6 +161,8 @@ class Camera
 	GenericList					m_Cameras;
 	AbilitiesList					m_AbilitiesList;
 	GenericList					m_CameraFiles;
+
+	CameraFile					m_CameraFile;
 
 	std::vector <std::string>		m_Detected;
 	std::vector <FileListItem>		m_Files;

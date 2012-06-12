@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
 
 	This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -56,7 +56,7 @@ class GPResult
 
 namespace {
 
-void logf (gp::GPLogLevel l, const char *dom, const char *fmt, va_list args, void *)
+void logf (gp::GPLogLevel, const char *dom, const char *fmt, va_list args, void *)
   {
 	char buf [2048];
 	const char *p = buf;
@@ -73,14 +73,14 @@ void logf (gp::GPLogLevel l, const char *dom, const char *fmt, va_list args, voi
 
 Camera::Camera()
   {
-#ifdef _DEBUG
+//#ifdef _DEBUG
 	static bool log_added = false;
 	if (!log_added)
 	  {
 		gp::gp_log_add_func (gp::GP_LOG_DEBUG, logf, 0);
 		log_added = true;
 	  }
-#endif
+//#endif
 
 	gp::gp_camera_new (&m_gpCamera);
 
@@ -195,11 +195,10 @@ size_t Camera::ReadFile (unsigned index, const void ** ptr, bool full)
 //	gp::CameraFileInfo cfi;
 //	res = gp::gp_camera_file_get_info (m_gpCamera, folder, name, &cfi, m_gpContext);
 
-	CameraFile cf;
-	res = gp::gp_camera_file_get (m_gpCamera, folder, name, full ? gp::GP_FILE_TYPE_NORMAL : gp::GP_FILE_TYPE_PREVIEW, cf, m_gpContext);
+	res = gp::gp_camera_file_get (m_gpCamera, folder, name, full ? gp::GP_FILE_TYPE_NORMAL : gp::GP_FILE_TYPE_PREVIEW, m_CameraFile, m_gpContext);
 
 	unsigned long size;
-	res = gp::gp_file_get_data_and_size (cf, (const char **) ptr, &size);
+	res = gp::gp_file_get_data_and_size (m_CameraFile, (const char **) ptr, &size);
 
 	return size;
   }
@@ -211,13 +210,17 @@ size_t Camera::ReadFile (unsigned index, const void ** ptr, bool full)
 
 bool Camera::SaveFile (unsigned index, const std::string& prefix, const std::string& path, unsigned absnum)
   {
+	std::cerr << "save " << index;
+
 	if (index >= m_Files.size())
-		return 0;
+		return false;
 
 	GPResult res;
 
 	const char *folder = m_Files [index].folder.c_str();
 	const char *name = m_Files [index].name.c_str();
+
+	std::cerr << " " << folder << " " << name << std::endl;
 
 	const char *extension = strrchr (name, '.');
 	if (!extension)	  // shouldn't happen!
@@ -225,13 +228,18 @@ bool Camera::SaveFile (unsigned index, const std::string& prefix, const std::str
 
 	// get file info and data
 
-	CameraFile cf;
-	res = gp::gp_camera_file_get (m_gpCamera, folder, name, gp::GP_FILE_TYPE_NORMAL, cf, m_gpContext);
+	res = gp::gp_camera_file_get (m_gpCamera, folder, name, gp::GP_FILE_TYPE_NORMAL, m_CameraFile, m_gpContext);
 
 	unsigned long size;
 	const void *ptr;
 
-	res = gp::gp_file_get_data_and_size (cf, (const char **) &ptr, &size);
+	res = gp::gp_file_get_data_and_size (m_CameraFile, (const char **) &ptr, &size);
+
+	if (ptr == 0 || size == 0)
+	  {
+		std::cerr << "ptr=" << ptr << ", size=" << size << std::endl;
+		return false;
+	  }
 
 	Exiv2::Image::AutoPtr img = Exiv2::ImageFactory::open ((const Exiv2::byte *) ptr, size);
 
@@ -310,7 +318,7 @@ bool Camera::SaveFile (unsigned index, const std::string& prefix, const std::str
 
 	// finally do the actual save
 
-  	res = gp::gp_file_save (cf, name_oss.str ().c_str());
+  	res = gp::gp_file_save (m_CameraFile, name_oss.str ().c_str());
 
 	return res >= 0;
   }

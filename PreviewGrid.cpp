@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -56,10 +56,22 @@ void PreviewGrid::Add (const char *name, const void *data, unsigned size)
 	++m_Count;
 
 	if (iy >= ny)
-		setColumnCount (++ny);
+	  {
+		setRowCount (++ny);
+		setRowHeight (iy, IMAGESIZE);
+	  }
 
 	QPixmap pm;
-	bool ok = pm.loadFromData ((const uchar *) data, size, "JPEG");
+	bool ok = pm.loadFromData ((const uchar *) data, size);//, "JPEG");
+
+#if 0 // ### don't bother because QPixmap/QImage has no lossless quick rotation mode
+	// check for portrait-mode rotation
+	Exiv2::Image::AutoPtr img = Exiv2::ImageFactory::open ((const Exiv2::byte *) ptr, size);
+
+	img->readMetadata();
+
+	Exiv2::Exifdatum& ??? = img->exifData() ["Exif.Image.???"];
+#endif
 
 	QLabel *label = new QLabel;
 	label->setAlignment (Qt::AlignCenter);
@@ -89,19 +101,18 @@ void PreviewGrid::resizeEvent (QResizeEvent *ev)
   {
 	QTableWidget::resizeEvent (ev);
 
-	int w = width();
-	int h = height();
+	int nx = columnCount();
 
-	int nx = w / IMAGESIZE;
-	int ny = h / IMAGESIZE;
+	if (nx == 0)
+	  {
+		int w = width();
 
-	setColumnCount (nx);
-	setRowCount (ny);
+		nx = w / IMAGESIZE;
 
-	for (int i = 0; i < nx; ++i)
-		setColumnWidth (i, IMAGESIZE);
+		setColumnCount (nx);
 
-	for (int i = 0; i < ny; ++i)
-		setRowHeight (i, IMAGESIZE);
+		for (int i = 0; i < nx; ++i)
+			setColumnWidth (i, IMAGESIZE);
+	  }
    }
 

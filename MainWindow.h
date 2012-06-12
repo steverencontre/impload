@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
 
 	This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -61,9 +61,10 @@ class MainWindow : public QMainWindow
 	void sig_SaveAll (const char *prefix, const char *path);
 
   public slots:
-	void NewThumbnail (const char *name, const void *data, unsigned size);
-	void ThumbnailsDone (unsigned nfiles);
-	void SaveAll()		{ emit sig_SaveAll (m_CameraInfo->prefix.toUtf8().data(), m_BaseFolder.toUtf8().data()); }
+	void FileCount (unsigned nfiles);
+	void NewThumbnail (unsigned index, const char *name, const void *data, unsigned size);
+	void ThumbnailsDone();
+	void SaveAll();
 	void Saved (unsigned index, bool ok);
 	void SavedAll();
 

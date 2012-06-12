@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
 
 	This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -43,8 +43,9 @@ LoaderThread::LoaderThread (QObject *parent)
 
 void LoaderThread::run()
   {
-	connect (this, SIGNAL (sig_NewThumbnail (const char *, const void *, unsigned)), parent(), SLOT (NewThumbnail (const char *, const void *, unsigned)), Qt::QueuedConnection);
-	connect (this, SIGNAL (sig_ThumbnailsDone (unsigned)), parent(), SLOT (ThumbnailsDone (unsigned)), Qt::QueuedConnection);
+	connect (this, SIGNAL (sig_FileCount (unsigned)), parent(), SLOT (FileCount (unsigned)), Qt::QueuedConnection);
+	connect (this, SIGNAL (sig_NewThumbnail (unsigned, const char *, const void *, unsigned)), parent(), SLOT (NewThumbnail (unsigned, const char *, const void *, unsigned)), Qt::QueuedConnection);
+	connect (this, SIGNAL (sig_ThumbnailsDone()), parent(), SLOT (ThumbnailsDone()), Qt::QueuedConnection);
 	connect (this, SIGNAL (sig_Saved (unsigned, bool)), parent(), SLOT (Saved (unsigned, bool)), Qt::QueuedConnection);
 	connect (this, SIGNAL (sig_SavedAll()), parent(), SLOT (SavedAll()), Qt::QueuedConnection);
 
@@ -55,6 +56,7 @@ void LoaderThread::run()
 	m_Camera->ScanFiles();
 	unsigned nfiles = m_Camera->Files ().size();
 
+	emit sig_FileCount (nfiles);
 
 	// send thumbnails to GUI
 
@@ -65,12 +67,12 @@ void LoaderThread::run()
 		const void *data;
 		size_t size = m_Camera->ReadFile (i, &data);
 
-		emit sig_NewThumbnail (m_Camera->Files() [i].name.c_str(), data, size);
+		emit sig_NewThumbnail (i, m_Camera->Files() [i].name.c_str(), data, size);
 
 		m_WaitCondition.wait (&m_Mutex);	// wait until GUI has handled thumbnail
 	  }
 
-	emit sig_ThumbnailsDone (nfiles);
+	emit sig_ThumbnailsDone();
 
 	// now wait until GUI signals time to save or pack up
 
