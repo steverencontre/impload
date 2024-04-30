@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-2024 Steve Rencontre	q.impload@rsn-tech.co.uk
 
 	This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,8 +18,12 @@
 
 */
 
-#include <QtGui/QApplication>
+#include <QtWidgets/QApplication>
+#include <QCommandLineParser>
+#include <QCommandLineOption>
+
 #include "MainWindow.h"
+
 
 int main (int argc, char *argv[])
   {
@@ -27,9 +31,29 @@ int main (int argc, char *argv[])
 	a.setOrganizationName ("RSN Technology");
 	a.setApplicationName ("impload");
 
-	MainWindow w;
+	QCommandLineParser parser;
+	parser.setApplicationDescription ("Import images from camera or file folder");
+	parser.addHelpOption();
+	parser.addVersionOption();
 
-	if (!w.DetectedCamera())
+	parser.addOptions
+	(
+		{
+			{{"f", "folder"}, "Use folder source, not camera"},
+			{{"t", "timeshift"}, "Add hours to EXIF timestamp (may be fractional or negative)", "timeshift"}
+		}
+	);
+
+	parser.process(a);
+
+	auto list {parser.positionalArguments()};
+	std::string start = list.empty() ? std::string {""} : list[0].toStdString();
+
+	double timeshift = parser.isSet ("timeshift") ? parser.value("timeshift").toDouble() : -999;
+
+	MainWindow w {parser.isSet ("f"), start, timeshift};
+
+	if (!w.GotValidSource())
 		return -1;
 
 	w.show();

@@ -25,36 +25,36 @@
 #include <QWaitCondition>
 #include <QMutex>
 
-#include "Camera.h"
+#include "ImageSource.h"
 
 class LoaderThread : public QThread
-  {
+{
 	Q_OBJECT
+public:
+	explicit	LoaderThread (QObject *parent = nullptr);
 
-  public:
-	explicit LoaderThread (QObject *parent = 0);
+	void		SetSource (ImageSource *source)	{ m_ImageSource = source; }
+	void		Continue()	{ m_WaitCondition.wakeAll(); }
 
-	void	SetCamera (Camera *pc)	{ m_Camera = pc; }
-	void  Continue()	{ m_WaitCondition.wakeAll(); }
+signals:
+	void		sig_FileCount (unsigned nfiles);
+	void		sig_NewThumbnail (unsigned index, const void *data, unsigned size, int orientation);
+	void		sig_ThumbnailsDone();
+	void		sig_SavedOne (unsigned index, bool success);
+	void		sig_SavedAll();
 
-  signals:
-	void  sig_FileCount (unsigned nfiles);
-	void  sig_NewThumbnail (unsigned index, const char *name, const void *data, unsigned size);
-	void  sig_ThumbnailsDone();
-	void  sig_Saved (unsigned index, bool success);
-	void  sig_SavedAll();
+public slots:
+	void		Save (const char *tag, const char *path, unsigned first);
 
-  public slots:
-	void  SaveAll (const char *prefix, const char *path);
+private:
+	void		run() override;
 
-  private:
-	virtual void	run();
-
-	QWaitCondition	    m_WaitCondition;
+	QWaitCondition		m_WaitCondition;
 	QMutex					m_Mutex;
-	Camera				  *m_Camera;
-	std::string				m_Prefix;
+	ImageSource		  *m_ImageSource {nullptr};
+	std::string				m_Tag;
 	std::string				m_SavePath;
-  };
+	size_t					m_First;
+};
 
 #endif // LOADERTHREAD_H

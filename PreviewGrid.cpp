@@ -21,11 +21,15 @@
 #include "PreviewGrid.h"
 
 #include <QIcon>
+#include <QImage>
 #include <QPixmap>
 #include <QLabel>
 
 #include <iostream>
 
+
+
+using std::max;
 
 const int IMAGESIZE = 96;		  // number of pixels for image previews
 
@@ -39,6 +43,21 @@ PreviewGrid::PreviewGrid (QWidget *parent)
 	QTableWidget (parent),
 	m_Count (0)
   {
+	m_RotateCW.rotate (-90);
+	m_RotateCCW.rotate (90);
+
+	connect (this, SIGNAL (cellClicked (int, int)), this, SLOT (CellClicked (int, int)));
+  }
+
+
+
+/*
+	dtor
+*/
+
+PreviewGrid::~PreviewGrid()
+  {
+	disconnect (SIGNAL (cellClicked (int, int)));
   }
 
 
@@ -46,8 +65,8 @@ PreviewGrid::PreviewGrid (QWidget *parent)
 	Add
 */
 
-void PreviewGrid::Add (const char *name, const void *data, unsigned size)
-  {
+void PreviewGrid::Add (const void *data, unsigned size, int orientation)
+{
 	int nx = columnCount();
 	int ny = rowCount();
 
@@ -55,32 +74,63 @@ void PreviewGrid::Add (const char *name, const void *data, unsigned size)
 	int iy = m_Count / nx;
 	++m_Count;
 
+	if (size == 0)		// missing thumb for some reason
+	{
+		QLabel *label = new QLabel;
+		label->setText("(missing)");
+		label->setAlignment (Qt::AlignCenter);
+		setCellWidget (iy, ix, label);
+		return;
+	}
+
 	if (iy >= ny)
-	  {
+	{
 		setRowCount (++ny);
 		setRowHeight (iy, IMAGESIZE);
-	  }
+	}
 
-	QPixmap pm;
-	bool ok = pm.loadFromData ((const uchar *) data, size);//, "JPEG");
+	QImage thumb;
+	thumb.loadFromData ((const uchar *) data, size);
 
-#if 0 // ### don't bother because QPixmap/QImage has no lossless quick rotation mode
-	// check for portrait-mode rotation
-	Exiv2::Image::AutoPtr img = Exiv2::ImageFactory::open ((const Exiv2::byte *) ptr, size);
+	static int dx, dy, xy;
 
-	img->readMetadata();
+	if (m_Count == 1)	// first time through, calculate scale factor
+	{
+		xy = 107;
+		dy = (thumb.height() - xy) / 2;
+		dx = (thumb.width() - xy) / 2;
 
-	Exiv2::Exifdatum& ??? = img->exifData() ["Exif.Image.???"];
-#endif
+		double s = (double) IMAGESIZE / (double) xy;
+
+		m_Scale.scale (s, s);
+		m_RotateCCW.scale (s, s);
+		m_RotateCW.scale (s, s);
+	}
+
+	QImage crop = thumb.copy (dx, dy, xy, xy);
+	QImage square = crop;//: crop.transformed (m_Scale);
+
+	switch (orientation)
+	{
+	case 1:	// no rotation
+		thumb = thumb.transformed (m_Scale);
+		break;
+
+	case 6:	// +90
+		thumb = thumb.transformed (m_RotateCCW);
+		break;
+
+	case 8:	// -90
+		thumb = thumb.transformed (m_RotateCW);
+		break;
+	}
+
 
 	QLabel *label = new QLabel;
-	label->setAlignment (Qt::AlignCenter);
-	label->setPixmap (pm);
-
-	std::cerr << name << " load " << size << " bytes " << (ok ? "ok" : "failed") << std::endl;
+	label->setPixmap (QPixmap::fromImage (square));
 
 	setCellWidget (iy, ix, label);
-  }
+}
 
 
 /*
@@ -115,4 +165,21 @@ void PreviewGrid::resizeEvent (QResizeEvent *ev)
 			setColumnWidth (i, IMAGESIZE);
 	  }
    }
+
+
+/*
+	Cell clicked
+*/
+
+void PreviewGrid::CellClicked (int r, int c)
+  {
+	int nx = columnCount();
+
+	int index = r * nx + c;
+
+	for (int i = 0; i  < m_Count; ++i)
+		cellWidget (i / nx, i % nx)->setEnabled (i >= index);
+
+	emit sig_SetFirst (index);
+  }
 

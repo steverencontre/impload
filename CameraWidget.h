@@ -28,15 +28,17 @@
 class CameraWidget
   {
   public:
-	CameraWidget () : m_pWidget (0) {}
+	CameraWidget () : m_pWidget {nullptr} {}
 	CameraWidget (gp::CameraWidget *p) : m_pWidget (p) {}
 	CameraWidget (const CameraWidget& w) : m_pWidget (w.m_pWidget) {}
 
-	CameraWidget operator[] (unsigned i) const  { gp::CameraWidget *p; gp::gp_widget_get_child (m_pWidget, i, &p); return p; }
-	CameraWidget operator[] (const char *p) const { return operator[] (std::string (p)); }
-	CameraWidget operator[] (const std::string& p) const;
+	bool  Find (CameraWidget cw, const std::string& path)  { m_pWidget = cw.FindChild (path); return m_pWidget != nullptr; }
 
-	operator bool() const { return m_pWidget != 0; }
+	CameraWidget operator[] (int i) const  { gp::CameraWidget *p; gp::gp_widget_get_child (m_pWidget, i, &p); return p; }
+	CameraWidget operator[] (const char *p) const { return operator[] (std::string (p)); }
+	CameraWidget operator[] (const std::string& p) const;	// throws exception if not found
+
+	operator bool() const { return m_pWidget != nullptr; }
 	std::string Name() const { const char *p; gp::gp_widget_get_name (m_pWidget, &p); return std::string (p); }
 
 	template <typename T>
@@ -46,6 +48,8 @@ class CameraWidget
 	int SetValue (const T& pt) { return gp::gp_widget_set_value (m_pWidget, &pt); }
 
   private:
+	gp::CameraWidget *FindChild (const std::string& p) const;	  // returns null widget if not found
+
 	gp::CameraWidget *m_pWidget;
   };
 

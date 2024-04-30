@@ -4,28 +4,47 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT       = core gui widgets
 
-QMAKE_CXXFLAGS += -std=c++0x
 
 debug: DEFINES += _DEBUG
 #DEFINES += $$CONFIG
 
-#CONFIG +=
+CONFIG += c++latest
 
 TARGET = impload
 TEMPLATE = app
+
+LIBS += -L/usr/local/lib64
 LIBS += -lgphoto2 -lgphoto2_port -lexiv2
 
+EXIFTOOL = /home/steve/OpenSource/cpp_exiftool
+
+#INCLUDEPATH +=/usr/local/include #/usr/local/include $${EXIFTOOL}/inc
+
 SOURCES += main.cpp\
-        MainWindow.cpp \
+Metadata.cpp \
+    Folder.cpp \
+    ImageSource.cpp \
+	MainWindow.cpp \
     Camera.cpp \
     LoaderThread.cpp \
-    PreviewGrid.cpp
+    PreviewGrid.cpp \
+    Chooser.cpp \
+    CameraWidget.cpp
+
+#SOURCES += $${EXIFTOOL}/src/ExifTool.cpp $${EXIFTOOL}/src/ExifToolPipe.cpp $${EXIFTOOL}/src/TagInfo.cpp
 
 HEADERS  += MainWindow.h \
     Camera.h \
+    Metadata.h \
+    Folder.h \
+    ImageSource.h \
     LoaderThread.h \
-    PreviewGrid.h
+    PreviewGrid.h \
+    Chooser.h \
+    CameraWidget.h \
+    gphoto2.h
 
-FORMS    += MainWindow.ui
+FORMS    += MainWindow.ui \
+    Chooser.ui

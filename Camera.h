@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-24 Steve Rencontre	q.impload@rsn-tech.co.uk
 
 	This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -26,43 +26,26 @@
 #include <string>
 #include <cassert>
 
+#include "gphoto2.h"
 
-// Not everything in gphoto2 has the gp_ prefix, so use a namespace. Beware that it refers to some standard
-// headers, which if not already included will end up in the namespace too, causing strange compilation errors.
-// Include any referenced standard headers here
+#include <iostream>
 
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <ltdl.h>
-#include <unistd.h>
-#include <time.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <strings.h>
-#include <dirent.h>
-#include <sys/stat.h>
-
-namespace gp {
-#include <gphoto2/gphoto2.h>
-}
-
+#include <ImageSource.h>
 
 // *** helpers *** //
 
-template <typename GPT>
+template <typename T>
 class Wrapper
   {
   public:
-	operator GPT *()	  { return m_Gp; }
-	int		Count() const;
+	operator T *()	  { return m_Gp; }
+	unsigned		Count() const;
 
   protected:
 	Wrapper()		{ New(); }
 	~Wrapper()	{ Del(); }
 
-	GPT	  *m_Gp;
+	T	  *m_Gp;
 
   private:
 	bool  New();
@@ -74,6 +57,8 @@ class PortInfoList : public Wrapper <gp::GPPortInfoList>
   {
   public:
 	PortInfoList()				{ gp::gp_port_info_list_load (m_Gp); }
+
+	void Append (gp::GPPortInfo inf) { gp::gp_port_info_list_append (m_Gp, inf); }
   };
 
 
@@ -118,7 +103,7 @@ namespace gp { inline int gp_file_count(gp::CameraFile *) { return 1; }	}	// ###
 	template<>	inline \
 	bool Wrapper<T>::Del() { return gp::gp_##F##_free (m_Gp); } \
 	template<> inline \
-	int Wrapper<T>::Count() const { return gp::gp_##F##_count (m_Gp); }
+	unsigned Wrapper<T>::Count() const { auto n = gp::gp_##F##_count (m_Gp); assert (n >= 0); return unsigned (n); }
 
 FUNCS (gp::GPPortInfoList, port_info_list)
 FUNCS (gp::CameraList, list)
@@ -129,28 +114,21 @@ FUNCS (gp::CameraFile, file)
 //////////////////////////////////////////////
 
 
-class Camera
+class Camera : public ImageSource
   {
   public:
 	Camera();
-	~Camera();
+	~Camera() override;
 
-	struct FileListItem
-	  {
-		std::string		folder;
-		std::string		name;
-	  };
 
 	const std::vector <std::string>& Detected() const	  { return m_Detected; }
-	const std::vector <FileListItem>& Files() const		  { return m_Files; }
 
 	void		Select (unsigned i);
-	void		ScanFiles();
-	size_t	ReadFile (unsigned index, const void **ptr, bool full = false);
-	bool		SaveFile (unsigned index, const std::string& prefix, const std::string& path, unsigned absnum);
 
   private:
-	void	AddFiles (const std::string& base);
+	void				AddFiles (const std::string& base) override;
+	ImageData		LoadData (const std::string& folder, const std::string& name, DataType type) override;
+	bool				WriteImageFile(const std::string& destname) override;
 
 	gp::Camera				  *m_gpCamera;
 	gp::GPContext			  *m_gpContext;
@@ -158,14 +136,14 @@ class Camera
 	gp::GPPortInfo				m_gpPortInfo;
 
 	PortInfoList					m_PortInfoList;
-	GenericList					m_Cameras;
+	GenericList						m_Cameras;
 	AbilitiesList					m_AbilitiesList;
-	GenericList					m_CameraFiles;
+	GenericList						m_CameraFiles;
 
-	CameraFile					m_CameraFile;
+	CameraFile						m_CameraFile;
+
 
 	std::vector <std::string>		m_Detected;
-	std::vector <FileListItem>		m_Files;
   };
 
 #endif // CAMERA_H

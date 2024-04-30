@@ -22,7 +22,17 @@
 
 #include <stdexcept>
 
+
 CameraWidget CameraWidget::operator[] (const std::string& p) const
+  {
+	CameraWidget cw {FindChild (p)};
+	if (!cw)
+		throw std::range_error ("No such camera widget");
+
+	return cw;
+  }
+
+gp::CameraWidget *CameraWidget::FindChild (const std::string& p) const
   {
 	size_t px1 = 0, px2;
 	gp::CameraWidget *cwp = m_pWidget;
@@ -33,12 +43,13 @@ CameraWidget CameraWidget::operator[] (const std::string& p) const
 		px2 = p.find ('/', px1);
 
 		if (gp::gp_widget_get_child_by_name (cwp, p.substr (px1, px2 - px1).c_str (), &cwp) != GP_OK)
-			throw std::range_error ("No such camera widget");
+			return nullptr;
 
 		px1 = px2 + 1;
 
 	  }
 		while (px2 != std::string::npos);
 
-	return CameraWidget (cwp);
+	return cwp;
   }
+

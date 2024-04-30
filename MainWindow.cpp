@@ -1,7 +1,7 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-14 Steve Rencontre	q.impload@rsn-tech.co.uk
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -22,9 +22,15 @@
 #include <QSettings>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QFileDialog>
+
+#include <QDebug>
 
 #include <algorithm>
 #include <functional>
+
+#include "Camera.h"
+#include "Folder.h"
 
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
@@ -33,93 +39,46 @@
 	ctor
 */
 
-MainWindow::MainWindow (QWidget *parent)
-  :
-	QMainWindow (parent),
+MainWindow::MainWindow (bool folder_mode, const std::string& start_folder, double timeshift)
+:
 	ui (new Ui::MainWindow),
-	m_Loader (this),
-	m_Camera (0),
-	m_CameraInfo (0)
-  {
+	m_Loader (this)
+{
 	ui->setupUi (this);
 
-	// create gphoto2 camera object
+	bool ok = folder_mode ? GetFolderSource (start_folder) : GetCameraSource();
+	if (!ok)
+		return;
 
-	while (!m_Camera) try
-	  {
-		m_Camera = new Camera;
-	  }
-	catch (const std::exception& x)
-	  {
-		if
-		  (
-			QMessageBox (QMessageBox::Warning, "impload",
-				"No cameras were detected. Please check connections and power",
-				QMessageBox::Retry | QMessageBox::Cancel
-				).exec()
-			== QMessageBox::Cancel
-		  )
-			return;
-	  }
-
-	// get stored camera settings and match/add detected camera(s)
-
-	ReadCameraSettings();
-
-	const std::vector <std::string>& detected (m_Camera->Detected());
-
-	unsigned n = 1; // detected.size();			### get user to choose if more than one camera detected
-
-	for (unsigned i = 0; i < n; ++i)
-	  {
-		m_Camera->Select (i);
-
-		QString cam (detected [i].c_str());
-
-		auto it = std::find_if (m_CIList.begin(), m_CIList.end(),
-			[&cam] (const CameraInfo& ci) { return cam == ci.type; }
-			);
-
-		if (it == m_CIList.end())
-		  {
-			CameraInfo ci;
-
-			ci.type		= cam;
-			ci.serial		= "";
-			ci.prefix		= "";
-			ci.conidx	= (int) i;
-
-			it = m_CIList.insert (it, ci);
-		  }
-		else
-			it->conidx = (int) i;
-
-		if (!m_CameraInfo)
-			m_CameraInfo = &*it;
-	  }
+	if (timeshift >= -24)
+		m_Source->TimeOffset (timeshift * 3600);
+	m_CameraInfo->timerr = m_Source->TimeOffset();
 
 	// populate import details table
 
-	ui->wImportDetails->setColumnWidth (0, 120);
-	ui->wImportDetails->setColumnWidth (1, 60);
+	m_DestinationBase = QSettings{}.value ("BaseFolder").toString();
 
 	ui->wImportDetails->setItem (0, 0, new QTableWidgetItem (m_CameraInfo->type));
-	ui->wImportDetails->setItem (0, 1, new QTableWidgetItem (m_CameraInfo->prefix));
-	ui->wImportDetails->setItem (0, 2, new QTableWidgetItem (m_BaseFolder));
+	ui->wImportDetails->setItem (0, 1, new QTableWidgetItem (m_CameraInfo->tag));
+	ui->wImportDetails->setItem (0, 2, new QTableWidgetItem (m_DestinationBase));
+	ui->wImportDetails->resizeColumnsToContents();
 
 	// start the loader thread
 
-	m_Loader.SetCamera (m_Camera);
+	m_Loader.SetSource (m_Source);
 	m_Loader.start();
 
-	// connect save all button
 
-	connect (ui->buttonBox, SIGNAL (accepted()), SLOT (SaveAll()));
+	connect (ui->wImagePreview, SIGNAL (sig_SetFirst(uint)), this, SLOT (SetFirst(uint)));
+
+	// connect save button
+
+	connect (ui->buttonBox, SIGNAL (accepted()), SLOT (Save()));
 
 	// disable buttons for the moment
 
 	ui->buttonBox->setEnabled (false);
-  }
+}
 
 
 /*
@@ -127,10 +86,104 @@ MainWindow::MainWindow (QWidget *parent)
 */
 
 MainWindow::~MainWindow()
-  {
-	delete m_Camera;
+{
+	delete m_Source;
 	delete ui;
-  }
+}
+
+
+/*
+	GetFolderSource
+*/
+
+bool MainWindow::GetFolderSource (const std::string& start)
+{
+	try
+	{
+		auto pfolder = new Folder (start);
+		m_Source = pfolder;
+		m_CIList.emplace_back (CameraInfo {"Folder", "", "X", 0, 0});
+		m_CameraInfo = &*m_CIList.begin();
+	}
+	catch (std::exception&)
+	{
+		return false;
+	}
+
+
+	return true;
+}
+
+
+/*
+	GetCameraSource
+*/
+
+bool MainWindow::GetCameraSource()
+{
+	// create gphoto2 camera object
+
+	Camera *pcam {nullptr};
+
+	while (!pcam)
+	{
+		try
+		{
+			pcam = new Camera;
+		}
+		catch (const std::exception&)
+		{
+			int ret = QMessageBox (QMessageBox::Warning, "impload",
+								   "No cameras were detected. Please check connections and power",
+								   QMessageBox::Retry | QMessageBox::Cancel
+								   ).exec();
+
+			if (ret == QMessageBox::Cancel)
+				return false;
+		}
+	}
+
+	// get stored camera settings and match/add detected camera(s)
+
+	ReadCameraSettings();
+
+	auto n = pcam->Detected().size();
+
+	if (n > 1)
+		std::cerr << "Note: " << n << " cameras detected, but only first will be used for now\n";
+
+	int i = 0;
+
+	pcam->Select (i);
+
+	QString cam (pcam->Detected() [i].c_str());
+
+	auto it = std::find_if (m_CIList.begin(), m_CIList.end(),
+		[&cam] (const CameraInfo& ci) { return cam == ci.type; }
+	);
+
+	if (it == m_CIList.end())
+	{
+		CameraInfo ci;
+
+		ci.type		= cam;
+		ci.serial		= "";
+		ci.tag		    = "";
+		ci.conidx	= (int) i;
+		ci.timerr	= 0;
+
+		it = m_CIList.insert (it, ci);
+	}
+	else
+		it->conidx = (int) i;
+
+	if (!m_CameraInfo)
+		m_CameraInfo = &*it;
+
+	m_Source = pcam;
+
+	return true;
+}
 
 
 /*
@@ -140,8 +193,6 @@ MainWindow::~MainWindow()
 void MainWindow::ReadCameraSettings()
   {
 	QSettings settings;
-
-	m_BaseFolder = settings.value ("BaseFolder").toString();
 
 	unsigned n = settings.beginReadArray ("Camera");
 	m_CIList.resize (n);
@@ -154,8 +205,9 @@ void MainWindow::ReadCameraSettings()
 
 		ci.type		= settings.value ("Type").toString();
 		ci.serial		= settings.value ("Serial").toString();
-		ci.prefix		= settings.value ("Prefix").toString();
+		ci.tag		    = settings.value ("Tag").toString();
 		ci.conidx	= -1;
+		ci.timerr	= 0;  // note that we don't read the time error as we only persist that for others to use
 	  }
 
 	settings.endArray();
@@ -170,8 +222,6 @@ void MainWindow::WriteCameraSettings()
   {
 	QSettings settings;
 
-	settings.setValue ("BaseFolder", m_BaseFolder);
-
 	settings.beginWriteArray ("Camera");
 
 	unsigned n = m_CIList.size();
@@ -184,7 +234,8 @@ void MainWindow::WriteCameraSettings()
 
 		settings.setValue ("Type", ci.type);
 		settings.setValue ("Serial", ci.serial);
-		settings.setValue ("Prefix", ci.prefix);
+		settings.setValue ("Tag", ci.tag);
+		settings.setValue ("Timerr", ci.timerr);
 	  }
 
 	settings.endArray();
@@ -217,9 +268,11 @@ void MainWindow::on_wImportDetails_cellChanged (int row, int column)
 	QString text = ui->wImportDetails->item (row, column)->text();
 
 	if (column == 1)
-		m_CameraInfo->prefix = text;
+		m_CameraInfo->tag = text;
 	else if (column == 2)
-		m_BaseFolder = text;
+		m_DestinationBase = text;
+
+	QSettings{}.setValue ("BaseFolder", m_DestinationBase);
 
 	WriteCameraSettings();
   }
@@ -231,8 +284,10 @@ void MainWindow::on_wImportDetails_cellChanged (int row, int column)
 
 void MainWindow::FileCount (unsigned nfiles)
   {
+	m_Total = nfiles;
+
 	ui->wProgressBar->setMinimum (0);
-	ui->wProgressBar->setMaximum ((int) nfiles);
+	ui->wProgressBar->setMaximum (m_Total);
 	ui->wProgressBar->setValue (0);
   }
 
@@ -242,9 +297,9 @@ void MainWindow::FileCount (unsigned nfiles)
 	NewThumbnail
 */
 
-void MainWindow::NewThumbnail (unsigned index, const char *name, const void *data, unsigned size)
+void MainWindow::NewThumbnail (unsigned index, const void *data, unsigned size, int orientation)
   {
-	ui->wImagePreview->Add (name, data, size);
+	ui->wImagePreview->Add (data, size, orientation);
 	ui->wProgressBar->setValue ((int) index + 1);
 	m_Loader.Continue();
   }
@@ -261,25 +316,26 @@ void MainWindow::ThumbnailsDone()
 
 
 /*
-	SaveAll
+	Save
 */
 
-void MainWindow::SaveAll()
+void MainWindow::Save()
   {
+	ui->wProgressBar->setMinimum (m_First);
 	ui->wProgressBar->setValue (0);
 
-	emit sig_SaveAll (m_CameraInfo->prefix.toUtf8().data(), m_BaseFolder.toUtf8().data());
+	emit sig_Save (m_CameraInfo->tag.toUtf8().data(), m_DestinationBase.toUtf8().data(), m_First);
   }
 
 
 /*
-	Saved
+	SavedOne
 */
 
-void MainWindow::Saved (unsigned index, bool ok)
+void MainWindow::SavedOne (unsigned index, bool ok)
   {
 	ui->wImagePreview->Saved (index, ok);
-	ui->wProgressBar->setValue ((int) index + 1);
+	ui->wProgressBar->setValue (int (index + 1));
   }
 
 
@@ -290,4 +346,31 @@ void MainWindow::Saved (unsigned index, bool ok)
 void MainWindow::SavedAll()
   {
 	QCoreApplication::quit();
+  }
+
+
+/*
+	on_AddFiles_triggered
+*/
+
+void MainWindow::on_AddFiles_triggered()
+  {
+	QMessageBox (QMessageBox::Warning, "impload",
+				"Function is not yet implemented",
+				QMessageBox::Ok
+				).exec();
+
+//	QString addtree = QFileDialog::getExistingDirectory (this, "Choose directory containing files to add");
+
+  }
+
+void MainWindow::on_actionInfo_triggered()
+  {
+	QString text = QString ("time error: %1").arg (m_CameraInfo->timerr);
+
+	QMessageBox (QMessageBox::Information, "impload",
+		text,
+		QMessageBox::Ok
+		).exec();
+
   }

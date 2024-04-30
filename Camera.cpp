@@ -1,68 +1,63 @@
 /*
 	impload - simple gphoto2-based camera file importer
 
-	Copyright (c) 2011-12 Steve Rencontre	q.impload@rsn-tech.co.uk
+	Copyright (c) 2011-24 Steve Rencontre	q.impload@rsn-tech.co.uk
 
 	This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include <cstdint>
 #include <iostream>
 #include <iomanip>
 #include <stdexcept>
 #include <cstdio>
-
+#include <ctime>
 #include <errno.h>
 
-#include <exiv2/image.hpp>
-#include <exiv2/exif.hpp>
-
 #include "Camera.h"
-
+#include "CameraWidget.h"
+#include "Metadata.h"
 
 class GPResult
-  {
-  public:
-	GPResult()											{}
-	GPResult (int r)									{ Set (r); }
+{
+public:
+	GPResult()										{}
+	GPResult (int r)								{ Set (r); }
 	const GPResult& operator= (int r)		{ Set (r); return *this; }
 	operator int() const							{ return m_Value; }
 
-  private:
+private:
 	void Set (int r)
-	  {
+	{
 		if ((m_Value = r) < 0)
-		  {
-			const char *p = r < -99 ? gp::gp_result_as_string (r) :  gp::gp_port_result_as_string (r);
+		{
+			const char *p = r < -99 ? gp::gp_result_as_string (r) : gp::gp_port_result_as_string (r);
 			fprintf (stderr, "%s\n", p);
-		  }
-	  }
+		}
+	}
 
 	int	  m_Value;
-  };
+};
 
 
 namespace {
 
-void logf (gp::GPLogLevel, const char *dom, const char *fmt, va_list args, void *)
-  {
-	char buf [2048];
-	const char *p = buf;
-	vsprintf (buf, fmt, args);
-	fprintf (stderr, "%s: %s\n", dom, p);
-  }
+void logf (gp::GPLogLevel, const char *dom, const char *msg, void *)
+{
+	fprintf (stderr, "%s: %s\n", dom, msg);
+}
+
 
 } // unnamed namespace
 
@@ -72,31 +67,51 @@ void logf (gp::GPLogLevel, const char *dom, const char *fmt, va_list args, void 
 */
 
 Camera::Camera()
-  {
-//#ifdef _DEBUG
-	static bool log_added = false;
-	if (!log_added)
-	  {
-		gp::gp_log_add_func (gp::GP_LOG_DEBUG, logf, 0);
-		log_added = true;
-	  }
-//#endif
+{
+	//	static bool log_added = false;
+	//	if (!log_added)
+	//	  {
+	//		gp::gp_log_add_func (gp::GP_LOG_DEBUG, logf, nullptr);
+	//		log_added = true;
+	//	  }
 
 	gp::gp_camera_new (&m_gpCamera);
+
+#if 0
+	int index = gp::gp_port_info_list_lookup_path (m_PortInfoList, "ptpip:");
+
+	//	int infos = gp::gp_port_info_list_count (m_PortInfoList);
+	//	for (int index = 0; index < infos; ++index)
+	if (index >= 0)
+	{
+		gp::GPPortInfo info;
+		gp::gp_port_info_list_get_info (m_PortInfoList, index, &info);
+
+		gp::gp_port_info_set_path (info, "ptpip:10.99.0.243");
+
+		char *name;
+		gp::gp_port_info_get_name (info, &name);
+
+		char *path;
+		gp::gp_port_info_get_path (info, &path);
+
+		std::cout << index << ": name=" << name << " path=" << path << std::endl;
+	}
+#endif
 
 	m_gpContext = gp::gp_context_new();
 	m_AbilitiesList.Load (m_gpContext);
 
 	gp::gp_abilities_list_detect (m_AbilitiesList, m_PortInfoList, m_Cameras, m_gpContext);
 
-	int n = m_Cameras.Count();
+	unsigned n = m_Cameras.Count();
 
 	if (n == 0)
-	  throw std::runtime_error ("no cameras found");
+		throw std::runtime_error ("no cameras found");
 
-	for (int i = 0; i < n; ++i)
+	for (unsigned i = 0; i < n; ++i)
 		m_Detected.push_back (m_Cameras[i].Name());
-  }
+}
 
 
 /*
@@ -104,9 +119,9 @@ Camera::Camera()
 */
 
 Camera::~Camera()
-  {
+{
 	gp::gp_camera_exit (m_gpCamera, m_gpContext);
-  }
+}
 
 
 /*
@@ -114,7 +129,7 @@ Camera::~Camera()
 */
 
 void	Camera::Select (unsigned index)
-  {
+{
 	assert (index < m_Detected.size());
 
 	int ai = gp::gp_abilities_list_lookup_model (m_AbilitiesList, m_Cameras [index].Name());
@@ -130,17 +145,68 @@ void	Camera::Select (unsigned index)
 	gp::gp_camera_set_port_info (m_gpCamera, m_gpPortInfo);
 
 	gp::gp_camera_init (m_gpCamera, m_gpContext);
-  }
 
+	// get date/time offset correction
 
-/*
-	ScanFiles
-*/
+	gp::CameraWidget *cwp;
+	gp::gp_camera_get_config (m_gpCamera, &cwp, m_gpContext);
 
-void	Camera::ScanFiles()
-  {
-	AddFiles ("/");
-  }
+	CameraWidget cw (cwp), cw2;
+	time_t camera_time;
+
+	if (cw2.Find (cw, "main/settings/datetimeutc"))
+	{
+		int value;
+
+		cw2.RetrieveValue (value);
+		camera_time = value;
+
+		m_TimeOffset = time (nullptr) - camera_time;
+	}
+
+	else if (cw2.Find (cw, "main/settings/datetime"))	  // beware of localtime assumption :-(
+	{
+		int value;
+
+		cw2.RetrieveValue (value);
+		camera_time = value;
+
+		// copy the local time hack from libgphoto/camlibs/ptp/config.c
+		time_t ltime = time (nullptr);
+		struct tm *ptm = gmtime (&ltime);
+		ptm->tm_isdst = -1;
+		ltime = mktime (ptm);
+
+		m_TimeOffset = ltime - camera_time;
+	}
+
+	else if (cw2.Find (cw, "main/other/d034"))
+	{
+		char *value;
+
+		cw2.RetrieveValue (value);
+		camera_time = atoi (value);
+
+		m_TimeOffset = time (nullptr) - camera_time;
+	}
+
+	else
+		m_TimeOffset = 0;
+
+	if
+	(
+		cw2.Find (cw, "main/actions/syncdatetimeutc") ||
+		cw2.Find (cw, "main/actions/syncdatetime")
+	)
+	{
+		cw2.SetValue (1);
+		gp::gp_camera_set_config (m_gpCamera, cwp, m_gpContext);
+	}
+
+	if (m_TimeOffset)
+		std::cerr << "Time offset = " << m_TimeOffset << std::endl;
+}
+
 
 
 /*
@@ -148,7 +214,7 @@ void	Camera::ScanFiles()
 */
 
 void	Camera::AddFiles (const std::string& base)
-  {
+{
 	GenericList list;
 	GPResult res;
 
@@ -160,166 +226,58 @@ void	Camera::AddFiles (const std::string& base)
 
 	res = gp::gp_camera_folder_list_files (m_gpCamera, base.c_str (), list, m_gpContext);
 
-	unsigned n = gp::gp_list_count (list);
+	unsigned n = list.Count();
 	for (unsigned i = 0; i < n; ++i)
-	  {
-		FileListItem fli = { base, list[i].Name() };
-		m_Files.push_back (fli);
-	  }
+		m_Files.emplace_back (FileListItem {base, list[i].Name()});
 
 	// recursively add files in subfolders
 
 	res = gp::gp_camera_folder_list_folders (m_gpCamera, base.c_str (), list, m_gpContext);
 
-	n = gp::gp_list_count (list);
+	n =  list.Count();
 	for (unsigned i = 0; i < n; ++i)
-		AddFiles (basex + list[i].Name());
-  }
+	{
+		if (list[i].Name()[0] != '.')
+			AddFiles (basex + list[i].Name());
+	}
+}
 
 
 /*
-	ReadFile
+	LoadData
 */
 
-size_t Camera::ReadFile (unsigned index, const void ** ptr, bool full)
-  {
-	if (index >= m_Files.size())
-		return 0;
+ImageSource::ImageData Camera::LoadData (const std::string& folder, const std::string& name, DataType type)
+{
+	static gp::CameraFileType typemap [3] =
+	{
+		gp::GP_FILE_TYPE_NORMAL,
+		gp::GP_FILE_TYPE_PREVIEW,
+		gp::GP_FILE_TYPE_EXIF
+	};
 
 	GPResult res;
-
-	const char *folder = m_Files [index].folder.c_str();
-	const char *name = m_Files [index].name.c_str();
-
-//	### CameraFileInfo doesn't contain anything presently useful to us
-//	gp::CameraFileInfo cfi;
-//	res = gp::gp_camera_file_get_info (m_gpCamera, folder, name, &cfi, m_gpContext);
-
-	res = gp::gp_camera_file_get (m_gpCamera, folder, name, full ? gp::GP_FILE_TYPE_NORMAL : gp::GP_FILE_TYPE_PREVIEW, m_CameraFile, m_gpContext);
-
 	unsigned long size;
-	res = gp::gp_file_get_data_and_size (m_CameraFile, (const char **) ptr, &size);
+	const char *ptr;
 
-	return size;
-  }
+	res = gp::gp_camera_file_get (m_gpCamera, folder.c_str(), name.c_str(), typemap [type], m_CameraFile, m_gpContext);
+	res = gp::gp_file_get_data_and_size (m_CameraFile, &ptr, &size);
+
+	QDateTime dt;
+	if (type == FULL && res >= 0)
+		dt = Metadata {ptr, size}.Timestamp();
+
+	return {(const uint8_t *) ptr, size, dt};
+
+}
 
 
 /*
-	SaveFile
+	WriteImageFile
 */
 
-bool Camera::SaveFile (unsigned index, const std::string& prefix, const std::string& path, unsigned absnum)
-  {
-	std::cerr << "save " << index;
-
-	if (index >= m_Files.size())
-		return false;
-
-	GPResult res;
-
-	const char *folder = m_Files [index].folder.c_str();
-	const char *name = m_Files [index].name.c_str();
-
-	std::cerr << " " << folder << " " << name << std::endl;
-
-	const char *extension = strrchr (name, '.');
-	if (!extension)	  // shouldn't happen!
-		extension = ".xxx";
-
-	// get file info and data
-
-	res = gp::gp_camera_file_get (m_gpCamera, folder, name, gp::GP_FILE_TYPE_NORMAL, m_CameraFile, m_gpContext);
-
-	unsigned long size;
-	const void *ptr;
-
-	res = gp::gp_file_get_data_and_size (m_CameraFile, (const char **) &ptr, &size);
-
-	if (ptr == 0 || size == 0)
-	  {
-		std::cerr << "ptr=" << ptr << ", size=" << size << std::endl;
-		return false;
-	  }
-
-	Exiv2::Image::AutoPtr img = Exiv2::ImageFactory::open ((const Exiv2::byte *) ptr, size);
-
-	img->readMetadata();
-
-	Exiv2::Exifdatum& datetime = img->exifData() ["Exif.Image.DateTime"];
-//	Exiv2::Exifdatum& datetime = img->exifData() ["Exif.Photo.DateTimeDigitized"];
-
-	// make new name and create save folder tree if necessary
-
-	std::ostringstream name_oss;
-	name_oss << std::setfill ('0');
-
-	name_oss << path;
-	if (*path.rbegin() != '/')
-		name_oss << "/";
-
-	int made_year_dir = 0;
-	int made_day_dir = 0;
-
-	try
-	  {
-		int year, month, day, hour, minute, second;
-		char c;
-
-		std::istringstream (datetime.value ().toString()) >>
-			year >> c >> month >> c >> day >> hour >> c >> minute >> c >> second;
-
-		name_oss << year;
-
-		if (year != made_year_dir)
-		  {
-			std::string dir = name_oss.str();
-
-			if (mkdir (dir.c_str(), ALLPERMS) == 0)
-				made_year_dir = year;
-			else if (errno != EEXIST)
-			  {
-				std::cerr << "Unable to create directory " << dir << std::endl;
-				throw 1;
-			  }
-		  }
-
-		 name_oss << '/' << year << '-' << std::setw(2) << month << '-' << std::setw(2) << day;
-
-		 int xday = year * 366 * month * 31 + day;		// simple pseudo day number guaranteed to be unique
-		 if (xday != made_day_dir)
-		  {
-			std::string dir = name_oss.str ();
-
-			if (mkdir (dir.c_str(), ALLPERMS) == 0)
-				made_day_dir = xday;
-			else if (errno != EEXIST)
-			  {
-				std::cerr << "Unable to create directory " << dir << std::endl;
-				throw 2;
-			  }
-		  }
-
-		name_oss << '/';
-
-		if (!prefix.empty())
-			name_oss << prefix << '_';
-
-		name_oss << year << std::setw(2) << month << std::setw(2) << day
-			<< '_' << std::setw(2) << hour << std::setw(2) << minute << std::setw(2) << second
-			<< '_' << std::setw(6) << absnum
-			<< extension;
-	  }
-	catch (...)
-	  {
-		std::cerr << "Unable to create directory and/or new name (maybe can't convert EXIF datum to date or time value)\n";
-
-		name_oss << name;
-	  }
-
-	// finally do the actual save
-
-  	res = gp::gp_file_save (m_CameraFile, name_oss.str ().c_str());
-
+bool Camera::WriteImageFile(const std::string& destname)
+{
+	GPResult res =  gp::gp_file_save (m_CameraFile, destname.c_str());
 	return res >= 0;
-  }
-
+}

@@ -19,11 +19,13 @@
 */
 
 #include <QSettings>
+#include <QFile>
 
 #include "LoaderThread.h"
 
 #include <algorithm>
 #include <functional>
+#include <iostream>
 
 /*
 	ctor
@@ -31,8 +33,7 @@
 
 LoaderThread::LoaderThread (QObject *parent)
   :
-  	QThread(parent),
-  	m_Camera (0)
+	QThread {parent}
   {
   }
 
@@ -43,18 +44,19 @@ LoaderThread::LoaderThread (QObject *parent)
 
 void LoaderThread::run()
   {
-	connect (this, SIGNAL (sig_FileCount (unsigned)), parent(), SLOT (FileCount (unsigned)), Qt::QueuedConnection);
-	connect (this, SIGNAL (sig_NewThumbnail (unsigned, const char *, const void *, unsigned)), parent(), SLOT (NewThumbnail (unsigned, const char *, const void *, unsigned)), Qt::QueuedConnection);
+	connect (this, SIGNAL (sig_FileCount(uint)), parent(), SLOT (FileCount(uint)), Qt::QueuedConnection);
+	connect (this, SIGNAL (sig_NewThumbnail (unsigned, const void *, unsigned, int)), parent(), SLOT (NewThumbnail (unsigned, const void *, unsigned, int)), Qt::QueuedConnection);
 	connect (this, SIGNAL (sig_ThumbnailsDone()), parent(), SLOT (ThumbnailsDone()), Qt::QueuedConnection);
-	connect (this, SIGNAL (sig_Saved (unsigned, bool)), parent(), SLOT (Saved (unsigned, bool)), Qt::QueuedConnection);
+	connect (this, SIGNAL (sig_SavedOne(uint,bool)), parent(), SLOT (SavedOne(uint,bool)), Qt::QueuedConnection);
 	connect (this, SIGNAL (sig_SavedAll()), parent(), SLOT (SavedAll()), Qt::QueuedConnection);
 
-	connect (parent(), SIGNAL (sig_SaveAll (const char *, const char *)), SLOT (SaveAll (const char *, const char *)));
+	connect (parent(), SIGNAL (sig_Save (const char *, const char *, unsigned)), SLOT (Save (const char *, const char *, unsigned)));
 
 	// get the file list from the camera
 
-	m_Camera->ScanFiles();
-	unsigned nfiles = m_Camera->Files ().size();
+	m_ImageSource->ScanFiles();
+	unsigned nfiles = m_ImageSource->Files ().size();
+	int orientation = 0;	// default if no EXIF override
 
 	emit sig_FileCount (nfiles);
 
@@ -64,17 +66,18 @@ void LoaderThread::run()
 
 	for (unsigned i = 0; i < nfiles; ++i)
 	  {
-		const void *data;
-		size_t size = m_Camera->ReadFile (i, &data);
+		auto [data, size, dt] = m_ImageSource->LoadData (i, ImageSource::THUMB);
 
-		emit sig_NewThumbnail (i, m_Camera->Files() [i].name.c_str(), data, size);
+		// check for portrait-mode rotation -- doesn't work at present!
+//		orientation = Metadata {data, size}.Orientation();
 
-		m_WaitCondition.wait (&m_Mutex);	// wait until GUI has handled thumbnail
+		emit sig_NewThumbnail (i, data, size, orientation);
+		m_WaitCondition.wait (&m_Mutex);	// wait until GUI has handled previous thumbnail
 	  }
 
 	emit sig_ThumbnailsDone();
 
-	// now wait until GUI signals time to save or pack up
+	// now wait until GUI signals to save or pack up
 
 	m_WaitCondition.wait (&m_Mutex);
 
@@ -83,27 +86,31 @@ void LoaderThread::run()
 		QSettings settings;
 		unsigned absnum = settings.value ("AbsNum", 0).toUInt();
 
-		for (unsigned i = 0; i < nfiles; ++i)
+		for (unsigned i = m_First; i < nfiles; ++i)
 		  {
-			bool ok = m_Camera->SaveFile (i, m_Prefix, m_SavePath, absnum++);
+			bool ok = m_ImageSource->SaveFile (i, m_Tag, m_SavePath, absnum++);
 
-			emit sig_Saved (i, ok);
+			emit sig_SavedOne (i, ok);
 		  }
 
 		settings.setValue ("AbsNum", absnum);
 	  }
+
+	m_Mutex.unlock();
 
 	emit sig_SavedAll();
   }
 
 
 /*
-	SaveAll
+	Save
 */
 
-void  LoaderThread::SaveAll (const char *prefix, const char *path)
+void  LoaderThread::Save (const char *tag, const char *path, unsigned first)
   {
-	m_Prefix.assign (prefix);
+	m_Tag.assign (tag);
 	m_SavePath.assign (path);
+	m_First = first;
+
 	Continue();
   }

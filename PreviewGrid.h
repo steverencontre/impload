@@ -22,21 +22,32 @@
 #define PREVIEWGRID_H
 
 #include <QTableWidget>
+#include <QTransform>
 
 class PreviewGrid : public QTableWidget
   {
     Q_OBJECT
 
   public:
-	explicit PreviewGrid (QWidget *parent = 0);
+	explicit PreviewGrid (QWidget *parent = nullptr);
+	~PreviewGrid();
 
-	void Add (const char *name, const void *data, unsigned size);
+	void Add (const void *data, unsigned size, int orientation);
 	void Saved (unsigned index, bool ok);
+
+  signals:
+	void  sig_SetFirst (unsigned index);
+
+  private slots:
+	void CellClicked (int r, int c);
 
   private:
 	virtual void  resizeEvent (QResizeEvent *);
 
-	int		  m_Count;
-};
+	int					m_Count;
+	QTransform 	m_RotateCW;
+	QTransform 	m_RotateCCW;
+	QTransform	m_Scale;
+  };
 
 #endif // PREVIEWGRID_H
