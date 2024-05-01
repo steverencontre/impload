@@ -62,7 +62,7 @@ bool ImageSource::SaveFile (unsigned index, const std::string& tag, const std::s
 
 	// get file info and data
 
-	auto [ptr, size, dt] = LoadData (folder, name, FULL);
+	auto [ptr, size, dt] = LoadData (folder, name, strcmp (extension, ".MP4") == 0 ? VIDEO : FULL);
 
 	if (ptr == nullptr)
 		return false;

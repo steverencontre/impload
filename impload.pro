@@ -15,19 +15,20 @@ CONFIG += c++latest
 TARGET = impload
 TEMPLATE = app
 
-LIBS += -L/usr/local/lib64
+LIBS += -L/usr/local/lib64 -L/usr/local/lib
 LIBS += -lgphoto2 -lgphoto2_port -lexiv2
+LIBS += -lmediainfo
 
 EXIFTOOL = /home/steve/OpenSource/cpp_exiftool
 
 #INCLUDEPATH +=/usr/local/include #/usr/local/include $${EXIFTOOL}/inc
 
-SOURCES += main.cpp\
-Metadata.cpp \
+SOURCES += main.cpp \
+    Camera.cpp \
+    Metadata.cpp \
     Folder.cpp \
     ImageSource.cpp \
 	MainWindow.cpp \
-    Camera.cpp \
     LoaderThread.cpp \
     PreviewGrid.cpp \
     Chooser.cpp \
@@ -37,7 +38,7 @@ Metadata.cpp \
 
 HEADERS  += MainWindow.h \
     Camera.h \
-    Metadata.h \
+	Metadata.h \
     Folder.h \
     ImageSource.h \
     LoaderThread.h \

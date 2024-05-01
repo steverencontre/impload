@@ -1,6 +1,13 @@
 
 #include "Metadata.h"
 
+
+
+#define EXIV2API
+#include <exiv2/exiv2.hpp>
+
+#include <MediaInfo/MediaInfo.h>
+
 #include <iostream>
 #include <fstream>
 #include <exception>
@@ -53,13 +60,13 @@ QDateTime Metadata::Timestamp (const Exiv2::ExifData& ed)
 	return dt;
 }
 
-void ExifOps::Orientation (int) {}	  // not presently used
+void MetadataOps::Orientation (int) {}	  // not presently used
 
 /*
  * Exiv2 wrapper
  */
 
-class MetadataExiv2 : public ExifOps
+class MetadataExiv2 : public MetadataOps
 {
 public:
   MetadataExiv2 (const void *data, size_t size);
@@ -77,7 +84,6 @@ private:
 };
 
 
-//SubSecDateTimeOriginal
 
 MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 {
@@ -158,11 +164,72 @@ void MetadataExiv2::Timestamp (QDateTime dt)
   // #### write exif update
 }
 
+
 /*
- * Exif Wrapper
+	MediaInfo wrapper
+*/
+
+using namespace MediaInfoLib;
+
+class MetadataMediaInfo	: public MetadataOps, private MediaInfo
+{
+public:
+  MetadataMediaInfo (const void *data, size_t size);
+
+  QDateTime Timestamp() const override;
+  void Timestamp (QDateTime) override {}
+
+  int Orientation() const override { return 0; }
+//  void Orientation (int) override;
+
+private:
+
+
+};
+
+
+
+
+MetadataMediaInfo::MetadataMediaInfo (const void *data, size_t size)
+{
+	auto x = Open ((ZenLib::int8u *) data, size);
+	std::cout << x << " 0x" << std::hex <<  x << std::dec << std::endl;
+	std::cout << Inform() << std::endl;
+}
+
+QDateTime MetadataMediaInfo::Timestamp() const
+{
+	auto p = const_cast <MetadataMediaInfo *> (this);
+
+	String param {"Encoded_Date"};
+	QString sdate {QString::fromStdString (p->Get (Stream_General, 0, param))};
+
+	if (sdate.endsWith (" UTC"))
+	{
+		sdate.chop (4);
+		sdate += "Z";
+	}
+
+	auto qdate {QDateTime::fromString (sdate, Qt::ISODate)};
+
+	if (qdate.isNull() || !qdate.isValid())
+	{
+		std::cerr << "Couldn't translate '" << sdate.toStdString() << "' as date" << std::endl;
+		throw std::runtime_error ("MediaInfo date problem");
+	}
+
+	return qdate;
+}
+
+
+/*
+ * Metadata Wrapper
  */
 
-Metadata::Metadata (const void *data, size_t size)
+Metadata::Metadata (const void *data, size_t size, bool video)
 {
-	m_Delegate = std::make_unique <MetadataExiv2> (data, size);
+	if (video)
+		m_Delegate = std::make_unique <MetadataMediaInfo> (data, size);
+	else
+		m_Delegate = std::make_unique <MetadataExiv2> (data, size);
 }

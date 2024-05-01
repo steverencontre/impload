@@ -14,7 +14,7 @@ public:
 	ImageSource();
 	virtual ~ImageSource() {}
 
-	enum DataType { FULL, THUMB, EXIF };
+	enum DataType { FULL, THUMB, EXIF, VIDEO, DATA_TYPES };
 
 	struct FileListItem
 	  {

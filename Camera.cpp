@@ -51,29 +51,26 @@ private:
 };
 
 
-namespace {
-
-void logf (gp::GPLogLevel, const char *dom, const char *msg, void *)
-{
-	fprintf (stderr, "%s: %s\n", dom, msg);
-}
-
-
-} // unnamed namespace
-
-
 /*
 	ctor
 */
 
 Camera::Camera()
 {
-	//	static bool log_added = false;
-	//	if (!log_added)
-	//	  {
-	//		gp::gp_log_add_func (gp::GP_LOG_DEBUG, logf, nullptr);
-	//		log_added = true;
-	//	  }
+#define LOGGING 0
+#if LOGGING
+	static bool log_added = false;
+	if (!log_added)
+	  {
+		gp::gp_log_add_func (gp::GP_LOG_DEBUG,
+			[] (gp::GPLogLevel, const char *dom, const char *msg, void *)
+			{
+				fprintf (stderr, "%s: %s\n", dom, msg);
+			},
+			nullptr);
+		log_added = true;
+	  }
+#endif
 
 	gp::gp_camera_new (&m_gpCamera);
 
@@ -249,11 +246,12 @@ void	Camera::AddFiles (const std::string& base)
 
 ImageSource::ImageData Camera::LoadData (const std::string& folder, const std::string& name, DataType type)
 {
-	static gp::CameraFileType typemap [3] =
+	constexpr gp::CameraFileType typemap [DATA_TYPES] =
 	{
 		gp::GP_FILE_TYPE_NORMAL,
 		gp::GP_FILE_TYPE_PREVIEW,
-		gp::GP_FILE_TYPE_EXIF
+		gp::GP_FILE_TYPE_EXIF,
+		gp::GP_FILE_TYPE_NORMAL
 	};
 
 	GPResult res;
@@ -264,8 +262,8 @@ ImageSource::ImageData Camera::LoadData (const std::string& folder, const std::s
 	res = gp::gp_file_get_data_and_size (m_CameraFile, &ptr, &size);
 
 	QDateTime dt;
-	if (type == FULL && res >= 0)
-		dt = Metadata {ptr, size}.Timestamp();
+	if ((type == FULL || type == VIDEO) && res >= 0)
+		dt = Metadata {ptr, size, type == VIDEO}.Timestamp();
 
 	return {(const uint8_t *) ptr, size, dt};
 

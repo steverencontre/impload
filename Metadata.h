@@ -1,23 +1,21 @@
-#ifndef EXIFWRAPPER_H
-#define EXIFWRAPPER_H
+#ifndef METADATA_H
+#define METADATA_H
 
-/*!	\brief		Historical wrapper to use Exiv2 if possible, or ExifTool C++ binding if not.
- *					This is no longer relevant now that Exiv2 supports Canon .CR3 format and
- *					should probably be removed for clarity.
+/*!	\brief		Originally a wrapper to use Exiv2 if possible, or ExifTool C++ binding if not.
+ *					The latter was less efficient but Exiv2 didn't support the Canon .CR3 format
+ *					at the time. This is no longer the case, but now we've added MediaInfo to
+ *					get video metadata.
  */
 
 #include <QDateTime>
 
 #include <memory>
 
-#define EXIV2API
-#include <exiv2/exiv2.hpp>
 
-
-class ExifOps
+class MetadataOps
 {
 public:
-  virtual ~ExifOps() = default;
+  virtual ~MetadataOps() = default;
 
   virtual QDateTime Timestamp() const = 0;
   virtual void Timestamp (QDateTime) = 0;
@@ -27,10 +25,10 @@ public:
 };
 
 
-class Metadata : public ExifOps
+class Metadata : public MetadataOps
 {
 public:
-	Metadata (const void *data, size_t size);
+	Metadata (const void *data, size_t size, bool video=false);
 
 	QDateTime Timestamp() const override		{ return m_Delegate->Timestamp(); }
 	void Timestamp (QDateTime dt) override	{ m_Delegate->Timestamp (dt); }
@@ -42,7 +40,7 @@ public:
 	static QDateTime Timestamp (const T& ed);
 
 private:
-  std::unique_ptr <ExifOps>		m_Delegate;
+  std::unique_ptr <MetadataOps>		m_Delegate;
 };
 
-#endif // EXIFWRAPPER_H
+#endif // METADATA_H

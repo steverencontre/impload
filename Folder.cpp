@@ -67,6 +67,7 @@ void	Folder::AddFiles (const std::string& base)
 
 ImageSource::ImageData Folder::LoadData (const std::string& folder, const std::string& name, DataType type)
 {
+#if 0
 	m_CurrentFile = folder + "/" + name;
 	auto fio {new Exiv2::FileIo {m_CurrentFile}};
 
@@ -89,7 +90,10 @@ ImageSource::ImageData Folder::LoadData (const std::string& folder, const std::s
 		m_SharedBuffer.reserve (size);
 		memcpy (m_SharedBuffer.data(), databuf.data(), size);
 	}
-
+#else
+	size_t size {0};
+	QDateTime dt;
+#endif
 	return {m_SharedBuffer.data(), size, dt};		// note, we only return real data for thumbnail, because full file will be copied directly
 }
 
