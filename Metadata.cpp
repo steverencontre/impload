@@ -87,43 +87,62 @@ private:
 
 MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 {
-	static enum { NONE, CR2, BMFF} mode {NONE};
+	assert (Exiv2::enableBMFF());
 
-	auto memio {new Exiv2::MemIo {(const Exiv2::byte *) data, size}};
-	Exiv2::Image *image;
+	enum ImageType { NONE, JPEG, CR2, BMFF, ORF };
+
+	static ImageType last_type {NONE};
+	ImageType type {NONE};
 
 	auto px = (const uint8_t *) data;
-
 	if (px[0] == 0xFF && px[1] == 0xD8)		// file is jpeg
-		image = new Exiv2::JpegImage (Exiv2::MemIo::UniquePtr {memio}, false);
-	else switch (mode)
+		type = JPEG;
+	else
+		type = last_type;
+
+	Exiv2::MemIo *io {nullptr};
+	Exiv2::Image *image {nullptr};
+
+	switch (type)
 	{
-	case NONE:
-		image = new Exiv2::Cr2Image (Exiv2::MemIo::UniquePtr {memio}, false);
-		if (image->good())
-			mode = CR2;
-		else
-		{
-			if (!Exiv2::enableBMFF())
-				std::cerr << "Recompile with BMFF support!!!\n";
-			image = new Exiv2::BmffImage (Exiv2::MemIo::UniquePtr {memio}, false);
-			if (image->good())
-				mode = BMFF;
-			else
-			{
-				std::cerr << "Unknown image type\n";
-				throw std::runtime_error ("Unknown image type");
-			}
-		}
+	case JPEG:
+		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
+		image = new Exiv2::JpegImage (Exiv2::MemIo::UniquePtr {io}, false);
 		break;
 
+	case NONE:		// we'll just drop through until we find something that works
 	case CR2:
-		image = new Exiv2::Cr2Image (Exiv2::MemIo::UniquePtr {memio}, false);
-		break;
+		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
+		image = new Exiv2::Cr2Image (Exiv2::MemIo::UniquePtr {io}, false);
+		if (image->good())		// once raw type has been set it should never change, so failure is only possible when type is unknown
+		{
+			last_type = CR2;
+			break;
+		}
 
 	case BMFF:
-		image = new Exiv2::BmffImage (Exiv2::MemIo::UniquePtr {memio}, false);
-		break;
+		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
+		image = new Exiv2::BmffImage (Exiv2::MemIo::UniquePtr {io}, false);
+		if (image->good())
+		{
+			last_type = BMFF;
+			break;
+		}
+
+	case ORF:
+		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
+		image = new Exiv2::OrfImage (Exiv2::MemIo::UniquePtr {io}, false);
+		if (image->good())
+		{
+			last_type = ORF;
+			break;
+		}
+	}
+
+	if (!image || !image->good())
+	{
+		std::cerr << "Unknown type or apparent change of raw type!" << std::endl;
+		throw std::runtime_error ("Image type error");
 	}
 
 	m_ImagePtr.reset (image);
