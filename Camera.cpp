@@ -2,6 +2,7 @@
 	impload - simple gphoto2-based camera file importer
 
 	Copyright (c) 2011-24 Steve Rencontre	q.impload@rsn-tech.co.uk
+	All rights reserved
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
