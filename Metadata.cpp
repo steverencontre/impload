@@ -42,34 +42,58 @@ QDateTime Metadata::Timestamp (const Exiv2::ExifData& ed)
 {
 	const Exiv2::ExifKey s_DTOKey {"Exif.Photo.DateTimeOriginal"};
 	const Exiv2::ExifKey s_SSOKey {"Exif.Photo.SubSecTimeOriginal"};
+
 	const Exiv2::ExifKey s_DTDKey {"Exif.Photo.DateTimeDigitized"};
 	const Exiv2::ExifKey s_SSDKey {"Exif.Photo.SubSecTimeDigitized"};
+
 	const Exiv2::ExifKey s_OSTKey {"Exif.Photo.OffsetTime"};
+	const Exiv2::ExifKey s_GTSKey ("Exif.GPSInfo.GPSTimeStamp");
 
+	// get DateTimeOriginal if possible, else DateTimeDigitized
 
-	auto dtiter = ed.findKey (s_DTOKey);
+	auto iter = ed.findKey (s_DTOKey);
 	auto ssiter = ed.findKey (s_SSOKey);
-	if (dtiter == ed.end())
+	if (iter == ed.end())
 	{
-		dtiter = ed.findKey (s_DTDKey);
+		iter = ed.findKey (s_DTDKey);
 		ssiter = ed.findKey (s_SSDKey);
 	}
-	if (dtiter == ed.end())
+	if (iter == ed.end())
 	{
 		std::cout << ed.count() << std::endl;
 		for (const auto& key : ed)
 			std::cout << key.key() << std::endl;
 		throw std::runtime_error ("Can't find date/time in EXIF");
 	}
-	auto dts = dtiter->getValue()->toString();
 
-	auto ostiter = ed.findKey (s_OSTKey);
-	if (ostiter != ed.end())
-		dts += ostiter->getValue()->toString();
+	std::string dts = iter->getValue()->toString();
+
+	// get timezone offset if possible
+
+	iter = ed.findKey (s_OSTKey);
+	if (iter != ed.end())						// got an explicit offset value
+		dts += iter->getValue()->toString();
 	else
-		dts += "Z";
+		dts += "Z";								// assume UTC unless we can deduce from GPS
 
 	auto dt {QDateTime::fromString (QString::fromStdString (dts), Qt::ISODate)};
+
+	if (iter == ed.end())						// not explicit offset, GPS?
+	{
+		iter = ed.findKey (s_GTSKey);
+		if (iter != ed.end())
+		{
+			auto h = iter->toFloat (0);
+			auto m = iter->toFloat (1);
+
+			auto dh = dt.time().hour() - (int) h;
+			auto dm = dt.time().minute() - (int) m;
+
+			dm = ((dm + 7) / 15) * 15;		// round to nearest 15 min to get timezone offset (usually whole hours, sometimes half, _very_ occasionally quater)
+
+			dt = dt.addSecs (-(dh * 3600 + dm * 60));
+		}
+	}
 
 	if (ssiter != ed.end())
 		dt = dt.addMSecs (ssiter->getValue()->toInt64());
@@ -136,6 +160,7 @@ MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 			last_type = CR2;
 			break;
 		}
+		[[fallthrough]];
 
 	case BMFF:
 		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
@@ -145,6 +170,7 @@ MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 			last_type = BMFF;
 			break;
 		}
+		[[fallthrough]];
 
 	case ORF:
 		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};

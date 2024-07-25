@@ -22,6 +22,7 @@
 #define IMAGESOURCE_H
 
 #include <cstdint>
+#include <iostream>
 #include <vector>
 #include <string>
 #include <tuple>
@@ -53,7 +54,14 @@ public:
 	ImageData		LoadData (unsigned index, DataType type);
 	bool				SaveFile (unsigned index, const std::string& tag, const std::string& path, unsigned absnum);
 
-	void ScanFiles()	{ AddFiles (m_BaseDir); }
+	void ScanFiles()
+	{
+		AddFiles (m_BaseDir);
+/*
+		for (const auto& item : m_Files)
+			std::cout << item.folder << " : " << item.name << std::endl;
+*/
+	}
 
 protected:
 
@@ -61,7 +69,7 @@ protected:
 	virtual ImageData	LoadData (const std::string& folder, const std::string& name, DataType type) = 0;
 	virtual bool			WriteImageFile (const std::string& destname) = 0;
 
-	std::string								m_BaseDir {"/"};		// ### need to fix this for file source
+	std::string								m_BaseDir;
 	std::vector <FileListItem>		m_Files;
 	time_t									m_TimeOffset {0};
 };

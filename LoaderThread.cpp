@@ -31,9 +31,10 @@
 	ctor
 */
 
-LoaderThread::LoaderThread (QObject *parent)
+LoaderThread::LoaderThread (QObject *parent, std::atomic<int>& absnum)
   :
-	QThread {parent}
+	QThread {parent},
+	m_AbsNum {absnum}
   {
   }
 
@@ -71,6 +72,8 @@ void LoaderThread::run()
 		// check for portrait-mode rotation -- doesn't work at present!
 //		orientation = Metadata {data, size}.Orientation();
 
+		std::cout << m_ImageSource->Files() [i].name << std::endl;
+
 		emit sig_NewThumbnail (i, data, size, orientation);
 		m_WaitCondition.wait (&m_Mutex);	// wait until GUI has handled previous thumbnail
 	  }
@@ -83,17 +86,12 @@ void LoaderThread::run()
 
 	if (!m_SavePath.empty())
 	  {
-		QSettings settings;
-		unsigned absnum = settings.value ("AbsNum", 0).toUInt();
-
 		for (unsigned i = m_First; i < nfiles; ++i)
 		  {
-			bool ok = m_ImageSource->SaveFile (i, m_Tag, m_SavePath, absnum++);
+			bool ok = m_ImageSource->SaveFile (i, m_Tag, m_SavePath, m_AbsNum++);
 
 			emit sig_SavedOne (i, ok);
 		  }
-
-		settings.setValue ("AbsNum", absnum);
 	  }
 
 	m_Mutex.unlock();

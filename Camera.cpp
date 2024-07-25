@@ -53,6 +53,13 @@ private:
 
 
 /*
+	class statics
+*/
+CameraList		Camera::s_CamerasSupported;
+GenericList			Camera::s_CamerasDetected;
+
+
+/*
 	ctor
 */
 
@@ -98,17 +105,19 @@ Camera::Camera()
 #endif
 
 	m_gpContext = gp::gp_context_new();
-	m_AbilitiesList.Load (m_gpContext);
+	s_CamerasSupported.Load (m_gpContext);
 
-	gp::gp_abilities_list_detect (m_AbilitiesList, m_PortInfoList, m_Cameras, m_gpContext);
+	gp::gp_abilities_list_detect (s_CamerasSupported, m_PortInfoList, s_CamerasDetected, m_gpContext);
 
-	unsigned n = m_Cameras.Count();
+	unsigned n = s_CamerasDetected.Count();
 
 	if (n == 0)
 		throw std::runtime_error ("no cameras found");
 
 	for (unsigned i = 0; i < n; ++i)
-		m_Detected.push_back (m_Cameras[i].Name());
+		std::cout << s_CamerasDetected[i].Name() << ": " << s_CamerasDetected[i].Value() << std::endl;
+
+	m_BaseDir = "/";
 }
 
 
@@ -128,15 +137,17 @@ Camera::~Camera()
 
 void	Camera::Select (unsigned index)
 {
-	assert (index < m_Detected.size());
+	assert (index < s_CamerasDetected.size());
 
-	int ai = gp::gp_abilities_list_lookup_model (m_AbilitiesList, m_Cameras [index].Name());
+	m_Type = s_CamerasDetected [index].Name();
+
+	int ai = gp::gp_abilities_list_lookup_model (s_CamerasSupported, s_CamerasDetected [index].Name());
 	assert (ai >= 0);
 
-	gp::gp_abilities_list_get_abilities (m_AbilitiesList, ai, &m_gpAbilities);
+	gp::gp_abilities_list_get_abilities (s_CamerasSupported, ai, &m_gpAbilities);
 	gp::gp_camera_set_abilities (m_gpCamera, m_gpAbilities);
 
-	int pi = gp::gp_port_info_list_lookup_path (m_PortInfoList, m_Cameras [index].Value());
+	int pi = gp::gp_port_info_list_lookup_path (m_PortInfoList, s_CamerasDetected [index].Value());
 	assert (pi >= 0);
 
 	gp::gp_port_info_list_get_info (m_PortInfoList, pi, &m_gpPortInfo);
@@ -149,10 +160,16 @@ void	Camera::Select (unsigned index)
 	gp::CameraWidget *cwp;
 	gp::gp_camera_get_config (m_gpCamera, &cwp, m_gpContext);
 
-	CameraWidget cw (cwp), cw2;
+	CameraWidget cw (cwp);
+	CameraWidget cw2;
+
+	cw2 = cw.Find ("main/status/serialnumber");
+	if (cw2)
+		cw2.RetrieveValue (m_SerialNo);
+
 	time_t camera_time;
 
-	if (cw2.Find (cw, "main/settings/datetimeutc"))
+	if ((cw2 = cw.Find ("main/settings/datetimeutc")))
 	{
 		int value;
 
@@ -162,7 +179,7 @@ void	Camera::Select (unsigned index)
 		m_TimeOffset = time (nullptr) - camera_time;
 	}
 
-	else if (cw2.Find (cw, "main/settings/datetime"))	  // beware of localtime assumption :-(
+	else if ((cw2 = cw.Find ("main/settings/datetime")))  // beware of localtime assumption :-(
 	{
 		int value;
 
@@ -178,7 +195,7 @@ void	Camera::Select (unsigned index)
 		m_TimeOffset = ltime - camera_time;
 	}
 
-	else if (cw2.Find (cw, "main/other/d034"))
+	else if ((cw2 = cw.Find ("main/other/d034")))
 	{
 		char *value;
 
@@ -193,8 +210,8 @@ void	Camera::Select (unsigned index)
 
 	if
 	(
-		cw2.Find (cw, "main/actions/syncdatetimeutc") ||
-		cw2.Find (cw, "main/actions/syncdatetime")
+		(cw2 = cw.Find ("main/actions/syncdatetimeutc")) ||
+		(cw2 = cw.Find ("main/actions/syncdatetime"))
 	)
 	{
 		cw2.SetValue (1);

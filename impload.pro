@@ -18,6 +18,7 @@ TEMPLATE = app
 LIBS += -L/usr/local/lib64 -L/usr/local/lib
 LIBS += -lgphoto2 -lgphoto2_port -lexiv2
 LIBS += -lmediainfo
+LIBS += -lyaml-cpp
 
 EXIFTOOL = /home/steve/OpenSource/cpp_exiftool
 

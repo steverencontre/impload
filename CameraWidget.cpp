@@ -22,7 +22,6 @@
 
 #include <stdexcept>
 
-
 CameraWidget CameraWidget::operator[] (const std::string& p) const
   {
 	CameraWidget cw {FindChild (p)};

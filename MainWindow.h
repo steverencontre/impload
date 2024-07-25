@@ -25,8 +25,10 @@
 #include <QResizeEvent>
 
 #include <vector>
+#include <atomic>
 
-//#include "PreviewGrid.h"
+#include <yaml-cpp/yaml.h>
+
 #include "LoaderThread.h"
 #include "ImageSource.h"
 
@@ -39,14 +41,12 @@ namespace Ui {
 
 struct CameraInfo
   {
-	QString		type;
-	QString		serial;
-	QString		tag;
-	int				conidx;
-	double		timerr;
+	std::string		type;
+	std::string		tag;
+	double			timerr;
   };
 
-typedef std::vector <CameraInfo> CameraInfoList;
+//typedef std::map <std::string, CameraInfo> CameraInfoMap;
 
 class MainWindow : public QMainWindow
 {
@@ -81,8 +81,6 @@ private:
 	bool	GetCameraSource();
 	bool	GetFolderSource (const std::string& start);
 
-	void ReadCameraSettings();
-	void WriteCameraSettings();
 
 	virtual void closeEvent (QCloseEvent *e)  { m_Loader.Continue(); QMainWindow::closeEvent (e); }
 
@@ -90,13 +88,15 @@ private:
 
 	LoaderThread			m_Loader;
 	ImageSource		  *m_Source {nullptr};
-	CameraInfoList		m_CIList;
-	CameraInfo		  *m_CameraInfo {nullptr};
-	QString					m_DestinationBase;
+	CameraInfo			m_CameraInfo;
+	std::string				m_DestinationBase;
 	unsigned				m_First {0};
 	unsigned				m_Total {0};
 	unsigned				m_ThumbnailRows;
 	unsigned				m_ThumbnailColums;
+	std::string				m_ConfigName;
+	YAML::Node			m_Config;
+	std::atomic<int>	m_AbsNum;
 };
 
 #endif // MAINWINDOW_H

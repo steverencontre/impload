@@ -49,7 +49,7 @@ int main (int argc, char *argv[])
 	auto list {parser.positionalArguments()};
 	std::string start = list.empty() ? std::string {""} : list[0].toStdString();
 
-	double timeshift = parser.isSet ("timeshift") ? parser.value("timeshift").toDouble() : -999;
+	double timeshift = parser.isSet ("timeshift") ? parser.value ("timeshift").toDouble() : 0;
 
 	MainWindow w {parser.isSet ("f"), start, timeshift};
 

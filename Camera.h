@@ -58,7 +58,7 @@ class PortInfoList : public Wrapper <gp::GPPortInfoList>
   public:
 	PortInfoList()				{ gp::gp_port_info_list_load (m_Gp); }
 
-	void Append (gp::GPPortInfo inf) { gp::gp_port_info_list_append (m_Gp, inf); }
+//	void Append (gp::GPPortInfo inf) { gp::gp_port_info_list_append (m_Gp, inf); }
   };
 
 
@@ -75,24 +75,30 @@ class GLItemHelper
 	size_t				  m_Index;
   };
 
-// note, 'CameraList' is a bit of a misnomer; it's not a list of cameras, so we rename it for our own use
+// note, 'gp::CameraList' is a bit of a misnomer; it's not a list of cameras, so we rename it for our own use
 
 class GenericList : public Wrapper <gp::CameraList>
   {
   public:
 	GLItemHelper operator[] (size_t i)	{ return GLItemHelper (m_Gp, i); }
+
+	int size() const { return gp_list_count (m_Gp); }
   };
 
 
-class AbilitiesList : public Wrapper <gp::CameraAbilitiesList>
+// _our_ CameraList is a list of cameras!
+
+class CameraList : public Wrapper <gp::CameraAbilitiesList>
   {
   public:
 	void Load (gp::GPContext *context)	{ gp_abilities_list_load (m_Gp, context);  }
   };
 
+
 class CameraFile : public Wrapper <gp::CameraFile>
   {
   };
+
 
 namespace gp { inline int gp_file_count(gp::CameraFile *) { return 1; }	}	// ### dummy
 
@@ -120,15 +126,17 @@ class Camera : public ImageSource
 	Camera();
 	~Camera() override;
 
-
-	const std::vector <std::string>& Detected() const	  { return m_Detected; }
-
-	void		Select (unsigned i);
+	void						Select (unsigned i);
+	const std::string&	SerialNo() const		{ return m_SerialNo; }
+	const std::string&	Type() const				{ return m_Type; }
 
   private:
 	void				AddFiles (const std::string& base) override;
 	ImageData		LoadData (const std::string& folder, const std::string& name, DataType type) override;
 	bool				WriteImageFile(const std::string& destname) override;
+
+	std::string						m_SerialNo;
+	std::string						m_Type;
 
 	gp::Camera				  *m_gpCamera;
 	gp::GPContext			  *m_gpContext;
@@ -136,14 +144,11 @@ class Camera : public ImageSource
 	gp::GPPortInfo				m_gpPortInfo;
 
 	PortInfoList					m_PortInfoList;
-	GenericList						m_Cameras;
-	AbilitiesList					m_AbilitiesList;
 	GenericList						m_CameraFiles;
-
 	CameraFile						m_CameraFile;
 
-
-	std::vector <std::string>		m_Detected;
+	static CameraList			s_CamerasSupported;
+	static GenericList			s_CamerasDetected;
   };
 
 #endif // CAMERA_H

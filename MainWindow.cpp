@@ -23,11 +23,12 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QFileDialog>
-
+#include <QStandardPaths>
 #include <QDebug>
 
 #include <algorithm>
 #include <functional>
+#include <fstream>
 
 #include "Camera.h"
 #include "Folder.h"
@@ -41,31 +42,36 @@
 
 MainWindow::MainWindow (bool folder_mode, const std::string& start_folder, double timeshift)
 :
-	ui (new Ui::MainWindow),
-	m_Loader (this)
+	ui {new Ui::MainWindow},
+	m_Loader {this, m_AbsNum}
 {
 	ui->setupUi (this);
+
+	m_ConfigName = QStandardPaths::writableLocation (QStandardPaths::AppConfigLocation).toStdString() + ".config.yaml";
+	m_Config = YAML::LoadFile (m_ConfigName);
+	m_AbsNum = m_Config ["General"] ["AbsNum"].as<int>();
 
 	bool ok = folder_mode ? GetFolderSource (start_folder) : GetCameraSource();
 	if (!ok)
 		return;
 
-	if (timeshift >= -24)
-		m_Source->TimeOffset (timeshift * 3600);
-	m_CameraInfo->timerr = m_Source->TimeOffset();
+	m_Source->TimeOffset (timeshift * 3600);
+	m_CameraInfo.timerr = m_Source->TimeOffset();
 
 	// populate import details table
 
-	m_DestinationBase = QSettings{}.value ("BaseFolder").toString();
 
-	ui->wImportDetails->setItem (0, 0, new QTableWidgetItem (m_CameraInfo->type));
-	ui->wImportDetails->setItem (0, 1, new QTableWidgetItem (m_CameraInfo->tag));
-	ui->wImportDetails->setItem (0, 2, new QTableWidgetItem (m_DestinationBase));
+
+	m_DestinationBase = m_Config ["General"] ["BaseFolder"].as<std::string>();
+
+	ui->wImportDetails->setItem (0, 0, new QTableWidgetItem (QString::fromStdString (m_CameraInfo.type)));
+	ui->wImportDetails->setItem (0, 1, new QTableWidgetItem (QString::fromStdString (m_CameraInfo.tag)));
+	ui->wImportDetails->setItem (0, 2, new QTableWidgetItem (QString::fromStdString (m_DestinationBase)));
 	ui->wImportDetails->resizeColumnsToContents();
 
 	// start the loader thread
 
-	m_Loader.SetSource (m_Source);
+	m_Loader.Prepare (m_Source);
 	m_Loader.start();
 
 
@@ -87,6 +93,11 @@ MainWindow::MainWindow (bool folder_mode, const std::string& start_folder, doubl
 
 MainWindow::~MainWindow()
 {
+	m_Config ["General"] ["AbsNum"] = (int) m_AbsNum;
+
+	std::ofstream outf {m_ConfigName};
+	outf << m_Config;
+
 	delete m_Source;
 	delete ui;
 }
@@ -102,8 +113,7 @@ bool MainWindow::GetFolderSource (const std::string& start)
 	{
 		auto pfolder = new Folder (start);
 		m_Source = pfolder;
-		m_CIList.emplace_back (CameraInfo {"Folder", "", "X", 0, 0});
-		m_CameraInfo = &*m_CIList.begin();
+		m_CameraInfo = CameraInfo {"Folder", "", 0};
 	}
 	catch (std::exception&)
 	{
@@ -143,104 +153,20 @@ bool MainWindow::GetCameraSource()
 		}
 	}
 
-	// get stored camera settings and match/add detected camera(s)
+	// in principle we could have more than one camera connected, but that's not implemented for now
+	pcam->Select (0);
 
-	ReadCameraSettings();
+	auto node = m_Config ["Cameras"] [pcam->SerialNo()];
 
-	auto n = pcam->Detected().size();
-
-	if (n > 1)
-		std::cerr << "Note: " << n << " cameras detected, but only first will be used for now\n";
-
-	int i = 0;
-
-	pcam->Select (i);
-
-	QString cam (pcam->Detected() [i].c_str());
-
-	auto it = std::find_if (m_CIList.begin(), m_CIList.end(),
-		[&cam] (const CameraInfo& ci) { return cam == ci.type; }
-	);
-
-	if (it == m_CIList.end())
-	{
-		CameraInfo ci;
-
-		ci.type		= cam;
-		ci.serial		= "";
-		ci.tag		    = "";
-		ci.conidx	= (int) i;
-		ci.timerr	= 0;
-
-		it = m_CIList.insert (it, ci);
-	}
-	else
-		it->conidx = (int) i;
-
-	if (!m_CameraInfo)
-		m_CameraInfo = &*it;
-
+	m_CameraInfo.type = pcam->Type();
+	m_CameraInfo.tag = node ["tag"].as<std::string>();
 	m_Source = pcam;
 
 	return true;
 }
 
 
-/*
-	ReadCameraSettings
-*/
 
-void MainWindow::ReadCameraSettings()
-  {
-	QSettings settings;
-
-	unsigned n = settings.beginReadArray ("Camera");
-	m_CIList.resize (n);
-
-	for (unsigned i = 0; i < n; ++i)
-	  {
-		settings.setArrayIndex (i);
-
-		CameraInfo& ci = m_CIList [i];
-
-		ci.type		= settings.value ("Type").toString();
-		ci.serial		= settings.value ("Serial").toString();
-		ci.tag		    = settings.value ("Tag").toString();
-		ci.conidx	= -1;
-		ci.timerr	= 0;  // note that we don't read the time error as we only persist that for others to use
-	  }
-
-	settings.endArray();
-  }
-
-
-/*
-	WriteCameraSettings
-*/
-
-void MainWindow::WriteCameraSettings()
-  {
-	QSettings settings;
-
-	settings.beginWriteArray ("Camera");
-
-	unsigned n = m_CIList.size();
-
-	for (unsigned i = 0; i < n; ++i)
-	  {
-		settings.setArrayIndex (i);
-
-		CameraInfo& ci = m_CIList [i];
-
-		settings.setValue ("Type", ci.type);
-		settings.setValue ("Serial", ci.serial);
-		settings.setValue ("Tag", ci.tag);
-		settings.setValue ("Timerr", ci.timerr);
-	  }
-
-	settings.endArray();
-
-  }
 
 
 /*
@@ -268,13 +194,12 @@ void MainWindow::on_wImportDetails_cellChanged (int row, int column)
 	QString text = ui->wImportDetails->item (row, column)->text();
 
 	if (column == 1)
-		m_CameraInfo->tag = text;
+		m_CameraInfo.tag = text.toStdString();
 	else if (column == 2)
-		m_DestinationBase = text;
+		m_DestinationBase = text.toStdString();
 
-	QSettings{}.setValue ("BaseFolder", m_DestinationBase);
-
-	WriteCameraSettings();
+	m_Config ["General"] ["BaseFolder"] = m_DestinationBase;
+;
   }
 
 
@@ -324,7 +249,7 @@ void MainWindow::Save()
 	ui->wProgressBar->setMinimum (m_First);
 	ui->wProgressBar->setValue (0);
 
-	emit sig_Save (m_CameraInfo->tag.toUtf8().data(), m_DestinationBase.toUtf8().data(), m_First);
+	emit sig_Save (m_CameraInfo.tag.c_str(), m_DestinationBase.c_str(), m_First);
   }
 
 
@@ -366,7 +291,7 @@ void MainWindow::on_AddFiles_triggered()
 
 void MainWindow::on_actionInfo_triggered()
   {
-	QString text = QString ("time error: %1").arg (m_CameraInfo->timerr);
+	QString text {"Not currently used"};//= QString ("time error: %1").arg (m_CameraInfo->timerr);
 
 	QMessageBox (QMessageBox::Information, "impload",
 		text,

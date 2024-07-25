@@ -23,6 +23,9 @@
 
 #include <QFileDialog>
 
+
+#include <fcntl.h>
+
 #include "Folder.h"
 #include "Metadata.h"
 
@@ -53,11 +56,20 @@ void	Folder::AddFiles (const std::string& base)
 
 	for (const auto& file : dirit)
 	{
-		auto ext {file.path().extension().string()};
-		if (ext == ".JPG" || ext == ".jpg" || ext == ".JPEG" || ext == ".jpeg"	)
-			m_Files.emplace_back (FileListItem {base, file.path().filename().string()});
+		if (file.is_directory())
+			AddFiles (file.path().string());
+		else
+		{
+			auto name {file.path().filename().string()};
+			auto ext {file.path().extension().string()};
+			if
+			(
+				name [0] != '.' &&
+				(ext == ".JPG" || ext == ".jpg" || ext == ".JPEG" || ext == ".jpeg")
+			)
+				m_Files.emplace_back (FileListItem {base, file.path().filename().string()});
+		}
 	}
-	std::sort (m_Files.begin(), m_Files.end());
 }
 
 
@@ -67,34 +79,23 @@ void	Folder::AddFiles (const std::string& base)
 
 ImageSource::ImageData Folder::LoadData (const std::string& folder, const std::string& name, DataType type)
 {
-#if 0
 	m_CurrentFile = folder + "/" + name;
-	auto fio {new Exiv2::FileIo {m_CurrentFile}};
 
-	fio->open();
+	int fd = open (m_CurrentFile.c_str(), O_RDONLY);
+	size_t size = lseek (fd, 0, SEEK_END);
+	lseek (fd, 0, SEEK_SET);
 
-	Exiv2::JpegImage image {Exiv2::FileIo::UniquePtr {fio}, false};
+	m_SharedBuffer.resize (size);
+	read (fd, m_SharedBuffer.data(), size);		// inefficient if we just want thumbnail, but leave for future enhancement
+	close (fd);
 
-	image.readMetadata();
-	auto ed {image.exifData()};
-	auto dt {Metadata::Timestamp (ed)};
-	size_t size {0};
+	Metadata m {m_SharedBuffer.data(), size, type == VIDEO};
 
-	if (type == THUMB)
-	{
-		Exiv2::ExifThumbC thumb {ed};
 
-		auto databuf {thumb.copy()};
+	QDateTime dt {m.Timestamp()};
+//	if (type == THUMB)
 
-		size = databuf.size();
-		m_SharedBuffer.reserve (size);
-		memcpy (m_SharedBuffer.data(), databuf.data(), size);
-	}
-#else
-	size_t size {0};
-	QDateTime dt;
-#endif
-	return {m_SharedBuffer.data(), size, dt};		// note, we only return real data for thumbnail, because full file will be copied directly
+	return {m_SharedBuffer.data(), size, dt};
 }
 
 

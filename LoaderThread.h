@@ -21,6 +21,8 @@
 #ifndef LOADERTHREAD_H
 #define LOADERTHREAD_H
 
+#include <atomic>
+
 #include <QThread>
 #include <QWaitCondition>
 #include <QMutex>
@@ -31,9 +33,9 @@ class LoaderThread : public QThread
 {
 	Q_OBJECT
 public:
-	explicit	LoaderThread (QObject *parent = nullptr);
+	explicit	LoaderThread (QObject *parent, std::atomic<int>& absnum);
 
-	void		SetSource (ImageSource *source)	{ m_ImageSource = source; }
+	void		Prepare (ImageSource *source)	{ m_ImageSource = source; }
 	void		Continue()	{ m_WaitCondition.wakeAll(); }
 
 signals:
@@ -52,6 +54,7 @@ private:
 	QWaitCondition		m_WaitCondition;
 	QMutex					m_Mutex;
 	ImageSource		  *m_ImageSource {nullptr};
+	std::atomic<int>&	m_AbsNum;
 	std::string				m_Tag;
 	std::string				m_SavePath;
 	size_t					m_First;
