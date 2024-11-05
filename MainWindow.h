@@ -41,6 +41,7 @@ namespace Ui {
 
 struct CameraInfo
   {
+	std::string		serial;
 	std::string		type;
 	std::string		tag;
 	double			timerr;

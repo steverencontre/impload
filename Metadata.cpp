@@ -128,8 +128,6 @@ private:
 
 MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 {
-	assert (Exiv2::enableBMFF());
-
 	enum ImageType { NONE, JPEG, CR2, BMFF, ORF };
 
 	static ImageType last_type {NONE};

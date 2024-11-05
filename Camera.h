@@ -82,7 +82,7 @@ class GenericList : public Wrapper <gp::CameraList>
   public:
 	GLItemHelper operator[] (size_t i)	{ return GLItemHelper (m_Gp, i); }
 
-	int size() const { return gp_list_count (m_Gp); }
+	size_t size() const { return gp_list_count (m_Gp); }
   };
 
 

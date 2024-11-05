@@ -44,7 +44,7 @@ private:
 		if ((m_Value = r) < 0)
 		{
 			const char *p = r < -99 ? gp::gp_result_as_string (r) : gp::gp_port_result_as_string (r);
-			fprintf (stderr, "%s\n", p);
+			fprintf (stderr, "GPResult %s\n", p);
 		}
 	}
 
@@ -280,7 +280,7 @@ ImageSource::ImageData Camera::LoadData (const std::string& folder, const std::s
 	res = gp::gp_file_get_data_and_size (m_CameraFile, &ptr, &size);
 
 	QDateTime dt;
-	if ((type == FULL || type == VIDEO) && res >= 0)
+	if ((type == FULL || type == VIDEO) && res >= 0 && ptr)
 		dt = Metadata {ptr, size, type == VIDEO}.Timestamp();
 
 	return {(const uint8_t *) ptr, size, dt};

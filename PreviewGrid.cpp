@@ -178,8 +178,15 @@ void PreviewGrid::CellClicked (int r, int c)
 	int index = r * nx + c;
 
 	for (int i = 0; i  < m_Count; ++i)
-		cellWidget (i / nx, i % nx)->setEnabled (i >= index);
-
+	{
+		r = i / nx;
+		c = i % nx;
+		auto pcw = cellWidget (r, c);
+		if (pcw)
+			pcw->setEnabled (i >= index);
+		else
+			std::cout << "index " << i << " ("  << r << "," << c << ") has no widget\n";
+	}
 	emit sig_SetFirst (index);
   }
 

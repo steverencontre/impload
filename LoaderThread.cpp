@@ -55,9 +55,13 @@ void LoaderThread::run()
 
 	// get the file list from the camera
 
+	std::cout << "Getting camera file list..." << std::endl;
+
 	m_ImageSource->ScanFiles();
 	unsigned nfiles = m_ImageSource->Files ().size();
 	int orientation = 0;	// default if no EXIF override
+
+	std::cout << "Got " << nfiles << " files" << std::endl;
 
 	emit sig_FileCount (nfiles);
 
@@ -88,9 +92,15 @@ void LoaderThread::run()
 	  {
 		for (unsigned i = m_First; i < nfiles; ++i)
 		  {
-			bool ok = m_ImageSource->SaveFile (i, m_Tag, m_SavePath, m_AbsNum++);
-
-			emit sig_SavedOne (i, ok);
+			try
+			{
+				bool ok = m_ImageSource->SaveFile (i, m_Tag, m_SavePath, m_AbsNum++);
+				emit sig_SavedOne (i, ok);
+			}
+			catch (const std::exception& e)
+			{
+				std::cout << "Image save error " << e.what() << std::endl;
+			}
 		  }
 	  }
 

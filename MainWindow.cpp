@@ -60,8 +60,6 @@ MainWindow::MainWindow (bool folder_mode, const std::string& start_folder, doubl
 
 	// populate import details table
 
-
-
 	m_DestinationBase = m_Config ["General"] ["BaseFolder"].as<std::string>();
 
 	ui->wImportDetails->setItem (0, 0, new QTableWidgetItem (QString::fromStdString (m_CameraInfo.type)));
@@ -73,7 +71,6 @@ MainWindow::MainWindow (bool folder_mode, const std::string& start_folder, doubl
 
 	m_Loader.Prepare (m_Source);
 	m_Loader.start();
-
 
 	connect (ui->wImagePreview, SIGNAL (sig_SetFirst(uint)), this, SLOT (SetFirst(uint)));
 
@@ -96,7 +93,7 @@ MainWindow::~MainWindow()
 	m_Config ["General"] ["AbsNum"] = (int) m_AbsNum;
 
 	std::ofstream outf {m_ConfigName};
-	outf << m_Config;
+	outf << "%YAML 1.2\n"	"# Impload configuration\n" "---\n" << m_Config;
 
 	delete m_Source;
 	delete ui;
@@ -113,7 +110,7 @@ bool MainWindow::GetFolderSource (const std::string& start)
 	{
 		auto pfolder = new Folder (start);
 		m_Source = pfolder;
-		m_CameraInfo = CameraInfo {"Folder", "", 0};
+		m_CameraInfo = CameraInfo {"", "Folder", "", 0};
 	}
 	catch (std::exception&)
 	{
@@ -158,8 +155,16 @@ bool MainWindow::GetCameraSource()
 
 	auto node = m_Config ["Cameras"] [pcam->SerialNo()];
 
+	m_CameraInfo.serial = pcam->SerialNo();
 	m_CameraInfo.type = pcam->Type();
-	m_CameraInfo.tag = node ["tag"].as<std::string>();
+	try
+	{
+		m_CameraInfo.tag = node ["tag"].as<std::string>();
+	}
+	catch (...)
+	{
+		m_CameraInfo.tag = "???";
+	}
 	m_Source = pcam;
 
 	return true;
@@ -187,20 +192,23 @@ void MainWindow::on_wImportDetails_cellDoubleClicked (int row, int column)
 */
 
 void MainWindow::on_wImportDetails_cellChanged (int row, int column)
-  {
+{
 	if (row != 0)
 		return;
 
 	QString text = ui->wImportDetails->item (row, column)->text();
 
 	if (column == 1)
+	{
 		m_CameraInfo.tag = text.toStdString();
+		m_Config ["Cameras"] [m_CameraInfo.serial] ["tag"] = m_CameraInfo.tag;
+	}
 	else if (column == 2)
+	{
 		m_DestinationBase = text.toStdString();
-
-	m_Config ["General"] ["BaseFolder"] = m_DestinationBase;
-;
-  }
+		m_Config ["General"] ["BaseFolder"] = m_DestinationBase;
+	}
+}
 
 
 /*
