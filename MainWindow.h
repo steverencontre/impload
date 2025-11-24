@@ -24,7 +24,6 @@
 #include <QMainWindow>
 #include <QResizeEvent>
 
-#include <vector>
 #include <atomic>
 
 #include <yaml-cpp/yaml.h>

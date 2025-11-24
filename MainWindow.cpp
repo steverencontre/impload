@@ -26,8 +26,6 @@
 #include <QStandardPaths>
 #include <QDebug>
 
-#include <algorithm>
-#include <functional>
 #include <fstream>
 
 #include "Camera.h"
@@ -48,15 +46,18 @@ MainWindow::MainWindow (bool folder_mode, const std::string& start_folder, doubl
 	ui->setupUi (this);
 
 	m_ConfigName = QStandardPaths::writableLocation (QStandardPaths::AppConfigLocation).toStdString() + ".config.yaml";
-	m_Config = YAML::LoadFile (m_ConfigName);
+    m_Config = YAML::LoadFile (m_ConfigName);
 	m_AbsNum = m_Config ["General"] ["AbsNum"].as<int>();
 
 	bool ok = folder_mode ? GetFolderSource (start_folder) : GetCameraSource();
 	if (!ok)
 		return;
 
-	m_Source->TimeOffset (timeshift * 3600);
-	m_CameraInfo.timerr = m_Source->TimeOffset();
+	if (timeshift)		// force override of setting deduced from camera current time
+	{
+		m_Source->TimeOffset (timeshift * 3600);
+		m_CameraInfo.timerr = m_Source->TimeOffset();
+	}
 
 	// populate import details table
 
@@ -169,9 +170,6 @@ bool MainWindow::GetCameraSource()
 
 	return true;
 }
-
-
-
 
 
 /*

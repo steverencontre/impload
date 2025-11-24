@@ -38,7 +38,6 @@ public:
   private:
 	void									AddFiles (const std::string& base) override;
 	ImageSource::ImageData	LoadData (const std::string& folder, const std::string& name, DataType type) override;
-	bool									WriteImageFile(const std::string& destname) override;
 
 	std::vector<unsigned char>	m_SharedBuffer;
 	std::string								m_CurrentFile;

@@ -23,18 +23,15 @@
 #define EXIV2API
 #include <exiv2/exiv2.hpp>
 
-#include <MediaInfo/MediaInfo.h>
-
 #include <iostream>
-#include <fstream>
 #include <exception>
 
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 
-
-
+#define _UNICODE	// messy Windows compatiblity issue unless you recompile libmediainfo.so from source
+#include <MediaInfo/MediaInfo.h>
 
 
 template<>
@@ -60,10 +57,10 @@ QDateTime Metadata::Timestamp (const Exiv2::ExifData& ed)
 	}
 	if (iter == ed.end())
 	{
-		std::cout << ed.count() << std::endl;
+		std::cout << "Can't find date/time in EXIF " << ed.count() << std::endl;
 		for (const auto& key : ed)
 			std::cout << key.key() << std::endl;
-		throw std::runtime_error ("Can't find date/time in EXIF");
+		return QDateTime::fromSecsSinceEpoch(0);	// should flag it as weird
 	}
 
 	std::string dts = iter->getValue()->toString();
@@ -112,7 +109,7 @@ class MetadataExiv2 : public MetadataOps
 public:
   MetadataExiv2 (const void *data, size_t size);
 
-  QDateTime Timestamp() const override { return Metadata::Timestamp (m_ExifData); }
+  QDateTime Timestamp() const override { return Metadata::Timestamp (m_ImagePtr->exifData()); }
   void Timestamp (QDateTime) override;
 
   int Orientation() const override;
@@ -120,8 +117,6 @@ public:
 
 private:
   std::unique_ptr <Exiv2::Image> m_ImagePtr;
-  Exiv2::ExifData			  m_ExifData;
-
 };
 
 
@@ -130,54 +125,48 @@ MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 {
 	enum ImageType { NONE, JPEG, CR2, BMFF, ORF };
 
-	static ImageType last_type {NONE};
+	static ImageType expected_type {NONE};
 	ImageType type {NONE};
 
 	auto px = (const uint8_t *) data;
-	if (px[0] == 0xFF && px[1] == 0xD8)		// file is jpeg
+	if (px[0] == 0xFF && px[1] == 0xD8)		// file is JPEG
 		type = JPEG;
-	else
-		type = last_type;
+	else										// not JPEG, must be some kind of raw format for us to figure out
+		type = expected_type;
 
-	Exiv2::MemIo *io {nullptr};
 	Exiv2::Image *image {nullptr};
 
 	switch (type)
 	{
 	case JPEG:
-		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
-		image = new Exiv2::JpegImage (Exiv2::MemIo::UniquePtr {io}, false);
+		image = new Exiv2::JpegImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
 		break;
 
 	case NONE:		// we'll just drop through until we find something that works
 	case CR2:
-		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
-		image = new Exiv2::Cr2Image (Exiv2::MemIo::UniquePtr {io}, false);
-		if (image->good())		// once raw type has been set it should never change, so failure is only possible when type is unknown
-		{
-			last_type = CR2;
+		image = new Exiv2::Cr2Image (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+		if (image->good())
+			expected_type = CR2;
+
+		if (expected_type == NONE)	// once raw type has been set it should never change, so failure is only logically possible when type is unknown
+			[[fallthrough]];
+		else
 			break;
-		}
-		[[fallthrough]];
 
 	case BMFF:
-		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
-		image = new Exiv2::BmffImage (Exiv2::MemIo::UniquePtr {io}, false);
+		image = new Exiv2::BmffImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
 		if (image->good())
-		{
-			last_type = BMFF;
+			expected_type = BMFF;
+
+		if (expected_type == NONE)
+			[[fallthrough]];
+		else
 			break;
-		}
-		[[fallthrough]];
 
 	case ORF:
-		io = new Exiv2::MemIo {(const Exiv2::byte *) data, size};
-		image = new Exiv2::OrfImage (Exiv2::MemIo::UniquePtr {io}, false);
+		image = new Exiv2::OrfImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
 		if (image->good())
-		{
-			last_type = ORF;
-			break;
-		}
+			expected_type = ORF;
 	}
 
 	if (!image || !image->good())
@@ -188,7 +177,9 @@ MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 
 	m_ImagePtr.reset (image);
 	m_ImagePtr->readMetadata();
-	m_ExifData = m_ImagePtr->exifData();
+
+//	static const char *types[] { "NONE", "JPEG", "CR2", "BMFF", "ORF" };
+//	std::cout << "type " << types [type] << " exif " << m_ImagePtr->exifData().count() << std::endl;
 }
 
 
@@ -198,19 +189,19 @@ int MetadataExiv2::Orientation() const
 
 	int orientation = 0;
 
-	auto o = m_ExifData.findKey (s_OrientationKey);
-	if (o != m_ExifData.end())
+	auto o = m_ImagePtr->exifData().findKey (s_OrientationKey);
+	if (o != m_ImagePtr->exifData().end())
 		orientation = o->value().toInt64();
 
 	return orientation;
 }
 
 
-
 void MetadataExiv2::Timestamp (QDateTime dt)
 {
-	auto dtstr = dt.toString (Qt::ISODate);
-	m_ExifData ["Exif.Photo.DateTimeDigitized"] = dtstr.toStdString();
+	auto dtstr = dt.toString (Qt::ISODate).toStdString();
+	m_ImagePtr->exifData() ["Exif.Photo.DateTimeOriginal"] = dtstr;
+	m_ImagePtr->exifData() ["Exif.Photo.DateTimeDigitized"] = dtstr;
 
 	try
 	{
@@ -241,28 +232,22 @@ public:
 
   int Orientation() const override { return 0; }
 //  void Orientation (int) override;
-
-private:
-
-
 };
-
-
 
 
 MetadataMediaInfo::MetadataMediaInfo (const void *data, size_t size)
 {
 	auto x = Open ((ZenLib::int8u *) data, size);
 	std::cout << x << " 0x" << std::hex <<  x << std::dec << std::endl;
-	std::cout << Inform() << std::endl;
+	std::wcout << Inform() << std::endl;
 }
 
 QDateTime MetadataMediaInfo::Timestamp() const
 {
 	auto p = const_cast <MetadataMediaInfo *> (this);
 
-	String param {"Encoded_Date"};
-	QString sdate {QString::fromStdString (p->Get (Stream_General, 0, param))};
+	std::wstring param {L"Encoded_Date"};
+	QString sdate = QString::fromStdWString (p->Get (Stream_General, 0, param));
 
 	if (sdate.endsWith (" UTC"))
 	{

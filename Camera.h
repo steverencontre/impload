@@ -22,15 +22,15 @@
 #define CAMERA_H
 
 
-#include <vector>
 #include <string>
 #include <cassert>
+#include <iostream>
 
 #include "gphoto2.h"
 
-#include <iostream>
+#include "CameraWidget.h"
+#include "ImageSource.h"
 
-#include <ImageSource.h>
 
 // *** helpers *** //
 
@@ -126,29 +126,29 @@ class Camera : public ImageSource
 	Camera();
 	~Camera() override;
 
-	void						Select (unsigned i);
+	void				Select (unsigned i);
 	const std::string&	SerialNo() const		{ return m_SerialNo; }
-	const std::string&	Type() const				{ return m_Type; }
+	const std::string&	Type() const			{ return m_Type; }
 
   private:
 	void				AddFiles (const std::string& base) override;
 	ImageData		LoadData (const std::string& folder, const std::string& name, DataType type) override;
-	bool				WriteImageFile(const std::string& destname) override;
 
-	std::string						m_SerialNo;
-	std::string						m_Type;
+	std::string			m_SerialNo;
+	std::string			m_Type;
 
-	gp::Camera				  *m_gpCamera;
-	gp::GPContext			  *m_gpContext;
-	gp::CameraAbilities		m_gpAbilities;
-	gp::GPPortInfo				m_gpPortInfo;
+	gp::Camera		    *	m_gpCamera;
+	gp::GPContext	    *	m_gpContext;
+	gp::CameraAbilities	m_gpAbilities;
+	gp::GPPortInfo		m_gpPortInfo;
+	gp::CameraWidget    *	m_gpConfig;
 
-	PortInfoList					m_PortInfoList;
-	GenericList						m_CameraFiles;
-	CameraFile						m_CameraFile;
+	PortInfoList			m_PortInfoList;
+	GenericList			m_CameraFiles;
+	CameraFile			m_CameraFile;
 
-	static CameraList			s_CamerasSupported;
-	static GenericList			s_CamerasDetected;
+	static CameraList		s_CamerasSupported;
+	static GenericList		s_CamerasDetected;
   };
 
 #endif // CAMERA_H

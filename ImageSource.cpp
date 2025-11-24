@@ -20,18 +20,18 @@
 
 #include <iostream>
 #include <cstring>
-#include <cstdlib>
 
+#include <fcntl.h>
 #include <sys/stat.h>
 
 #include "Metadata.h"
 #include "ImageSource.h"
 
+
 ImageSource::ImageSource()
 {
-
+	std::cout << "ImageSource created\n";
 }
-
 
 
 ImageSource::ImageData ImageSource::LoadData (unsigned index, DataType type)
@@ -41,8 +41,6 @@ ImageSource::ImageData ImageSource::LoadData (unsigned index, DataType type)
 
 	return LoadData (m_Files [index].folder,  m_Files [index].name, type);
   }
-
-
 
 
 /*
@@ -142,6 +140,10 @@ bool ImageSource::SaveFile (unsigned index, const std::string& tag, const std::s
 
 	// finally do the actual save
 
-	return WriteImageFile (name_oss.str ());
+	auto f = open (name_oss.str ().c_str(), O_WRONLY | O_CREAT, 0644);
+	auto n = write (f, ptr, size);
+	close (f);
+
+	return n == (int) size;
   }
 

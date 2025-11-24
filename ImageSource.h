@@ -66,11 +66,10 @@ public:
 protected:
 
 	virtual void			AddFiles (const std::string& base) = 0;
-	virtual ImageData	LoadData (const std::string& folder, const std::string& name, DataType type) = 0;
-	virtual bool			WriteImageFile (const std::string& destname) = 0;
+	virtual ImageData		LoadData (const std::string& folder, const std::string& name, DataType type) = 0;
 
-	std::string								m_BaseDir;
+	std::string					m_BaseDir;
 	std::vector <FileListItem>		m_Files;
-	time_t									m_TimeOffset {0};
+	time_t						m_TimeOffset {0};
 };
 #endif // IMAGESOURCE_H

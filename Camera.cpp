@@ -20,11 +20,9 @@
 
 #include <cstdint>
 #include <iostream>
-#include <iomanip>
 #include <stdexcept>
 #include <cstdio>
 #include <ctime>
-#include <errno.h>
 
 #include "Camera.h"
 #include "CameraWidget.h"
@@ -127,6 +125,21 @@ Camera::Camera()
 
 Camera::~Camera()
 {
+	// resync camera to PC clock if supported
+
+	CameraWidget cw  {m_gpConfig};
+	CameraWidget cw2;
+
+	if
+	(
+		(cw2 = cw.Find ("main/actions/syncdatetimeutc")) ||
+		(cw2 = cw.Find ("main/actions/syncdatetime"))
+	)
+	{
+		cw2.SetValue (1);
+		gp::gp_camera_set_config (m_gpCamera, m_gpConfig, m_gpContext);
+	}
+
 	gp::gp_camera_exit (m_gpCamera, m_gpContext);
 }
 
@@ -152,20 +165,19 @@ void	Camera::Select (unsigned index)
 
 	gp::gp_port_info_list_get_info (m_PortInfoList, pi, &m_gpPortInfo);
 	gp::gp_camera_set_port_info (m_gpCamera, m_gpPortInfo);
-
 	gp::gp_camera_init (m_gpCamera, m_gpContext);
+	gp::gp_camera_get_config (m_gpCamera, &m_gpConfig, m_gpContext);
 
-	// get date/time offset correction
+	// get config info
 
-	gp::CameraWidget *cwp;
-	gp::gp_camera_get_config (m_gpCamera, &cwp, m_gpContext);
-
-	CameraWidget cw (cwp);
+	CameraWidget cw  {m_gpConfig};
 	CameraWidget cw2;
 
 	cw2 = cw.Find ("main/status/serialnumber");
 	if (cw2)
 		cw2.RetrieveValue (m_SerialNo);
+
+	// get date/time offset correction
 
 	time_t camera_time;
 
@@ -207,16 +219,6 @@ void	Camera::Select (unsigned index)
 
 	else
 		m_TimeOffset = 0;
-
-	if
-	(
-		(cw2 = cw.Find ("main/actions/syncdatetimeutc")) ||
-		(cw2 = cw.Find ("main/actions/syncdatetime"))
-	)
-	{
-		cw2.SetValue (1);
-		gp::gp_camera_set_config (m_gpCamera, cwp, m_gpContext);
-	}
 
 	if (m_TimeOffset)
 		std::cerr << "Time offset = " << m_TimeOffset << std::endl;
@@ -284,16 +286,5 @@ ImageSource::ImageData Camera::LoadData (const std::string& folder, const std::s
 		dt = Metadata {ptr, size, type == VIDEO}.Timestamp();
 
 	return {(const uint8_t *) ptr, size, dt};
-
 }
 
-
-/*
-	WriteImageFile
-*/
-
-bool Camera::WriteImageFile(const std::string& destname)
-{
-	GPResult res =  gp::gp_file_save (m_CameraFile, destname.c_str());
-	return res >= 0;
-}

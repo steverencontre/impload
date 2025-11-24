@@ -99,14 +99,5 @@ ImageSource::ImageData Folder::LoadData (const std::string& folder, const std::s
 }
 
 
-/*
-	WriteImageFile
-*/
-
-bool Folder::WriteImageFile(const std::string& destname)
-{
-	return std::filesystem::copy_file (m_CurrentFile, destname);
-}
-
 
 

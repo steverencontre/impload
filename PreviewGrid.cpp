@@ -28,7 +28,6 @@
 #include <iostream>
 
 
-
 using std::max;
 
 const int IMAGESIZE = 96;		  // number of pixels for image previews
@@ -48,7 +47,6 @@ PreviewGrid::PreviewGrid (QWidget *parent)
 
 	connect (this, SIGNAL (cellClicked (int, int)), this, SLOT (CellClicked (int, int)));
   }
-
 
 
 /*
@@ -94,7 +92,7 @@ void PreviewGrid::Add (const void *data, unsigned size, int orientation)
 
 	static int dx, dy, xy;
 
-	if (m_Count == 1)	// first time through, calculate scale factor
+	if (m_Count == 1)		// first time through, calculate scale factor
 	{
 		xy = 107;
 		dy = (thumb.height() - xy) / 2;
@@ -108,7 +106,7 @@ void PreviewGrid::Add (const void *data, unsigned size, int orientation)
 	}
 
 	QImage crop = thumb.copy (dx, dy, xy, xy);
-	QImage square = crop;//: crop.transformed (m_Scale);
+	QImage square = crop;	//: crop.transformed (m_Scale);
 
 	switch (orientation)
 	{

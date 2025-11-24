@@ -22,7 +22,6 @@
 #define CAMERAWIDGET_H
 
 #include <string>
-#include <iostream>
 
 #include "gphoto2.h"
 

@@ -23,8 +23,6 @@
 
 #include "LoaderThread.h"
 
-#include <algorithm>
-#include <functional>
 #include <iostream>
 
 /*
