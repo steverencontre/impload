@@ -36,7 +36,7 @@ class PreviewGrid : public QTableWidget
 	void Saved (unsigned index, bool ok);
 
   signals:
-	void  sig_SetFirst (unsigned index);
+    void  sig_SetRange (unsigned index, bool is_last);
 
   private slots:
 	void CellClicked (int r, int c);

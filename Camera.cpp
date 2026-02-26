@@ -31,22 +31,22 @@
 class GPResult
 {
 public:
-	GPResult()										{}
-	GPResult (int r)								{ Set (r); }
-	const GPResult& operator= (int r)		{ Set (r); return *this; }
-	operator int() const							{ return m_Value; }
+    GPResult()							{}
+    GPResult (int r)						{ Set (r); }
+    const GPResult& operator= (int r)		{ Set (r); return *this; }
+    operator int() const					{ return m_Value; }
 
 private:
-	void Set (int r)
-	{
-		if ((m_Value = r) < 0)
-		{
-			const char *p = r < -99 ? gp::gp_result_as_string (r) : gp::gp_port_result_as_string (r);
-			fprintf (stderr, "GPResult %s\n", p);
-		}
-	}
+    void Set (int r)
+    {
+        if ((m_Value = r) < 0)
+        {
+            const char *p = r < -99 ? gp::gp_result_as_string (r) : gp::gp_port_result_as_string (r);
+            fprintf (stderr, "GPResult %s\n", p);
+        }
+    }
 
-	int	  m_Value;
+    int	  m_Value;
 };
 
 
@@ -102,20 +102,20 @@ Camera::Camera()
 	}
 #endif
 
-	m_gpContext = gp::gp_context_new();
-	s_CamerasSupported.Load (m_gpContext);
+    m_gpContext = gp::gp_context_new();
+    s_CamerasSupported.Load (m_gpContext);
 
-	gp::gp_abilities_list_detect (s_CamerasSupported, m_PortInfoList, s_CamerasDetected, m_gpContext);
+    gp::gp_abilities_list_detect (s_CamerasSupported, m_PortInfoList, s_CamerasDetected, m_gpContext);
 
-	unsigned n = s_CamerasDetected.Count();
+    unsigned n = s_CamerasDetected.Count();
 
-	if (n == 0)
-		throw std::runtime_error ("no cameras found");
+    if (n == 0)
+        throw std::runtime_error ("no cameras found");
 
-	for (unsigned i = 0; i < n; ++i)
-		std::cout << s_CamerasDetected[i].Name() << ": " << s_CamerasDetected[i].Value() << std::endl;
+    for (unsigned i = 0; i < n; ++i)
+        std::cout << s_CamerasDetected[i].Name() << ": " << s_CamerasDetected[i].Value() << std::endl;
 
-	m_BaseDir = "/";
+    m_BaseDir = "/";
 }
 
 
@@ -125,105 +125,101 @@ Camera::Camera()
 
 Camera::~Camera()
 {
-	// resync camera to PC clock if supported
+    // resync camera to PC clock if supported
 
-	CameraWidget cw  {m_gpConfig};
-	CameraWidget cw2;
+    CameraWidget cw  {m_gpConfig};
+    CameraWidget cw2;
 
-	if
-	(
-		(cw2 = cw.Find ("main/actions/syncdatetimeutc")) ||
-		(cw2 = cw.Find ("main/actions/syncdatetime"))
-	)
-	{
-		cw2.SetValue (1);
-		gp::gp_camera_set_config (m_gpCamera, m_gpConfig, m_gpContext);
-	}
+    if
+    (
+        (cw2 = cw.Find ("main/actions/syncdatetimeutc")) ||
+        (cw2 = cw.Find ("main/actions/syncdatetime"))
+    )
+    {
+        cw2.SetValue (1);
+        gp::gp_camera_set_config (m_gpCamera, m_gpConfig, m_gpContext);
+    }
 
-	gp::gp_camera_exit (m_gpCamera, m_gpContext);
+    gp::gp_camera_exit (m_gpCamera, m_gpContext);
 }
 
 
 /*
 	Select
-*/
+    */
 
 void	Camera::Select (unsigned index)
 {
-	assert (index < s_CamerasDetected.size());
+    assert (index < s_CamerasDetected.size());
 
-	m_Type = s_CamerasDetected [index].Name();
+    m_Type = s_CamerasDetected [index].Name();
 
-	int ai = gp::gp_abilities_list_lookup_model (s_CamerasSupported, s_CamerasDetected [index].Name());
-	assert (ai >= 0);
+    int ai = gp::gp_abilities_list_lookup_model (s_CamerasSupported, s_CamerasDetected [index].Name());
+    assert (ai >= 0);
 
-	gp::gp_abilities_list_get_abilities (s_CamerasSupported, ai, &m_gpAbilities);
-	gp::gp_camera_set_abilities (m_gpCamera, m_gpAbilities);
+    gp::gp_abilities_list_get_abilities (s_CamerasSupported, ai, &m_gpAbilities);
+    gp::gp_camera_set_abilities (m_gpCamera, m_gpAbilities);
 
-	int pi = gp::gp_port_info_list_lookup_path (m_PortInfoList, s_CamerasDetected [index].Value());
-	assert (pi >= 0);
+    int pi = gp::gp_port_info_list_lookup_path (m_PortInfoList, s_CamerasDetected [index].Value());
+    assert (pi >= 0);
 
-	gp::gp_port_info_list_get_info (m_PortInfoList, pi, &m_gpPortInfo);
-	gp::gp_camera_set_port_info (m_gpCamera, m_gpPortInfo);
-	gp::gp_camera_init (m_gpCamera, m_gpContext);
-	gp::gp_camera_get_config (m_gpCamera, &m_gpConfig, m_gpContext);
+    gp::gp_port_info_list_get_info (m_PortInfoList, pi, &m_gpPortInfo);
+    gp::gp_camera_set_port_info (m_gpCamera, m_gpPortInfo);
+    gp::gp_camera_init (m_gpCamera, m_gpContext);
+    gp::gp_camera_get_config (m_gpCamera, &m_gpConfig, m_gpContext);
 
-	// get config info
+    // get config info
 
-	CameraWidget cw  {m_gpConfig};
-	CameraWidget cw2;
+    CameraWidget cw  {m_gpConfig};
+    CameraWidget cw2;
 
-	cw2 = cw.Find ("main/status/serialnumber");
-	if (cw2)
-		cw2.RetrieveValue (m_SerialNo);
+    cw2 = cw.Find ("main/status/serialnumber");
+    if (cw2)
+        cw2.RetrieveValue (m_SerialNo);
 
-	// get date/time offset correction
+    // get date/time offset correction
 
-	time_t camera_time;
+    time_t camera_time;
 
-	if ((cw2 = cw.Find ("main/settings/datetimeutc")))
-	{
-		int value;
+    if ((cw2 = cw.Find ("main/settings/datetimeutc")))
+    {
+        int value;
 
-		cw2.RetrieveValue (value);
-		camera_time = value;
+        cw2.RetrieveValue (value);
+        camera_time = value;
 
-		m_TimeOffset = time (nullptr) - camera_time;
-	}
+        m_TimeOffset = time (nullptr) - camera_time;
+    }
+    else if ((cw2 = cw.Find ("main/settings/datetime")))  // beware of localtime assumption :-(
+    {
+        int value;
 
-	else if ((cw2 = cw.Find ("main/settings/datetime")))  // beware of localtime assumption :-(
-	{
-		int value;
+        cw2.RetrieveValue (value);
+        camera_time = value;
 
-		cw2.RetrieveValue (value);
-		camera_time = value;
+        // copy the local time hack from libgphoto/camlibs/ptp/config.c
+        time_t ltime = time (nullptr);
+        struct tm *ptm = gmtime (&ltime);
+        ptm->tm_isdst = -1;
+        ltime = mktime (ptm);
 
-		// copy the local time hack from libgphoto/camlibs/ptp/config.c
-		time_t ltime = time (nullptr);
-		struct tm *ptm = gmtime (&ltime);
-		ptm->tm_isdst = -1;
-		ltime = mktime (ptm);
+        m_TimeOffset = ltime - camera_time;
+    }
+    else if ((cw2 = cw.Find ("main/other/d034")))
+    {
+        char *value;
 
-		m_TimeOffset = ltime - camera_time;
-	}
+        cw2.RetrieveValue (value);
+        camera_time = atoi (value);
 
-	else if ((cw2 = cw.Find ("main/other/d034")))
-	{
-		char *value;
+        m_TimeOffset = time (nullptr) - camera_time;
+    }
+    else
+        m_TimeOffset = 0;
 
-		cw2.RetrieveValue (value);
-		camera_time = atoi (value);
-
-		m_TimeOffset = time (nullptr) - camera_time;
-	}
-
-	else
-		m_TimeOffset = 0;
-
-	if (m_TimeOffset)
-		std::cerr << "Time offset = " << m_TimeOffset << std::endl;
+    if (m_TimeOffset)
+        std::cerr << "Time offset = " << m_TimeOffset << std::endl;
 }
-
 
 
 /*
@@ -232,31 +228,61 @@ void	Camera::Select (unsigned index)
 
 void	Camera::AddFiles (const std::string& base)
 {
-	GenericList list;
-	GPResult res;
+    static size_t depth = 0;
+    static bool active = false;
 
-	std::string basex (base);
-	if (*basex.rbegin() != '/')
-		basex.append ("/");
+    GenericList list;
+    GPResult res;
+    std::string indent (depth * 2, ' ');
 
-	// add files in base folder
+    std::string basex (base);
+    if (*basex.rbegin() != '/')
+        basex.append ("/");
 
-	res = gp::gp_camera_folder_list_files (m_gpCamera, base.c_str (), list, m_gpContext);
+    std::cout << indent << base << std::endl;
 
-	unsigned n = list.Count();
-	for (unsigned i = 0; i < n; ++i)
-		m_Files.emplace_back (FileListItem {base, list[i].Name()});
+    // add files in base folder
 
-	// recursively add files in subfolders
+    if (active)
+    {
+        res = gp::gp_camera_folder_list_files (m_gpCamera, base.c_str (), list, m_gpContext);
 
-	res = gp::gp_camera_folder_list_folders (m_gpCamera, base.c_str (), list, m_gpContext);
+        unsigned n = list.Count();
+        for (unsigned i = 0; i < n; ++i)
+        {
+            auto name {list[i].Name()};
+            std::cout << indent << "  " << name << std::endl;
+            if (name[0] != '.')
+            {
+                gp::CameraFileInfo info;
+                gp::gp_camera_file_get_info (m_gpCamera, base.c_str (), name, &info, m_gpContext);
 
-	n =  list.Count();
-	for (unsigned i = 0; i < n; ++i)
-	{
-		if (list[i].Name()[0] != '.')
-			AddFiles (basex + list[i].Name());
-	}
+                if (info.file.mtime > m_Since)
+                    m_Files.emplace_back (FileListItem {base, name});
+            }
+        }
+    }
+
+    // recursively add files in subfolders
+
+    res = gp::gp_camera_folder_list_folders (m_gpCamera, base.c_str (), list, m_gpContext);
+
+    ++depth;
+    auto n =  list.Count();
+    for (unsigned i = 0; i < n; ++i)
+    {
+        auto name {list[i].Name()};
+        if (name[0] != '.')
+        {
+            bool dcim {strcmp (name, "DCIM") == 0 || memcmp (name, "store_", 6) == 0};
+            if (dcim)
+                active = true;
+            AddFiles (basex + list[i].Name());
+            if (dcim)
+                active = false;
+        }
+    }
+    --depth;
 }
 
 
@@ -266,25 +292,25 @@ void	Camera::AddFiles (const std::string& base)
 
 ImageSource::ImageData Camera::LoadData (const std::string& folder, const std::string& name, DataType type)
 {
-	constexpr gp::CameraFileType typemap [DATA_TYPES] =
-	{
-		gp::GP_FILE_TYPE_NORMAL,
-		gp::GP_FILE_TYPE_PREVIEW,
-		gp::GP_FILE_TYPE_EXIF,
-		gp::GP_FILE_TYPE_NORMAL
-	};
+    constexpr gp::CameraFileType typemap [DATA_TYPES] =
+    {
+        gp::GP_FILE_TYPE_NORMAL,
+        gp::GP_FILE_TYPE_PREVIEW,
+        gp::GP_FILE_TYPE_EXIF,
+        gp::GP_FILE_TYPE_NORMAL
+    };
 
-	GPResult res;
-	unsigned long size;
-	const char *ptr;
+    GPResult res;
+    unsigned long size;
+    const char *ptr;
 
-	res = gp::gp_camera_file_get (m_gpCamera, folder.c_str(), name.c_str(), typemap [type], m_CameraFile, m_gpContext);
-	res = gp::gp_file_get_data_and_size (m_CameraFile, &ptr, &size);
+    res = gp::gp_camera_file_get (m_gpCamera, folder.c_str(), name.c_str(), typemap [type], m_CameraFile, m_gpContext);
+    res = gp::gp_file_get_data_and_size (m_CameraFile, &ptr, &size);
 
-	QDateTime dt;
-	if ((type == FULL || type == VIDEO) && res >= 0 && ptr)
-		dt = Metadata {ptr, size, type == VIDEO}.Timestamp();
+    QDateTime dt;
+    if ((type == FULL || type == VIDEO) && res >= 0 && ptr)
+        dt = Metadata {ptr, size, type == VIDEO}.Timestamp();
 
-	return {(const uint8_t *) ptr, size, dt};
+    return {(const uint8_t *) ptr, size, dt};
 }
 

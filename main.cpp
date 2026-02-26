@@ -21,42 +21,51 @@
 #include <QtWidgets/QApplication>
 #include <QCommandLineParser>
 #include <QCommandLineOption>
+#include <QTimeZone>
 
 #include "MainWindow.h"
 
 
 int main (int argc, char *argv[])
-  {
-	QApplication a (argc, argv);
-	a.setOrganizationName ("RSN Technology");
-	a.setApplicationName ("impload");
+{
+    QApplication a (argc, argv);
+    a.setOrganizationName ("RSN Technology");
+    a.setApplicationName ("impload");
 
-	QCommandLineParser parser;
-	parser.setApplicationDescription ("Import images from camera or file folder");
-	parser.addHelpOption();
-	parser.addVersionOption();
+    QCommandLineParser parser;
+    parser.setApplicationDescription ("Import images from camera or file folder");
+    parser.addHelpOption();
+    parser.addVersionOption();
 
-	parser.addOptions
-	(
-		{
-			{{"f", "folder"}, "Use folder source, not camera"},
-			{{"t", "timeshift"}, "Add hours to EXIF timestamp (may be fractional or negative)", "timeshift"}
-		}
-	);
+    parser.addOptions
+    (
+        {
+            {{"t", "timeshift"}, "Add hours to EXIF timestamp (may be fractional or negative)", "timeshift"},
+            {{"s", "since"}, "Only add photos from this date/time (ISO format, UTC) onwards", "since"}
+        }
+    );
 
-	parser.process(a);
+    parser.process(a);
 
-	auto list {parser.positionalArguments()};
-	std::string start = list.empty() ? std::string {""} : list[0].toStdString();
+    auto list {parser.positionalArguments()};
+    std::string folder = list.empty() ? std::string {""} : list[0].toStdString();
 
-	double timeshift = parser.isSet ("timeshift") ? parser.value ("timeshift").toDouble() : 0;
+    double timeshift = parser.isSet ("timeshift") ? parser.value ("timeshift").toDouble() : 0;
+    time_t since {0};
 
-	MainWindow w {parser.isSet ("f"), start, timeshift};
+    if (parser.isSet ("since"))
+    {
+        QString t {parser.value ("since")};
+        auto s {QDateTime::fromString (t, Qt::ISODate)};
+        s.setTimeZone (QTimeZone::utc());
+        since = s.toSecsSinceEpoch() ;
+    }
+    MainWindow w {folder, timeshift, since};
 
-	if (!w.GotValidSource())
-		return -1;
+    if (!w.GotValidSource())
+        return -1;
 
-	w.show();
+    w.show();
 
-	return a.exec();
-  }
+    return a.exec();
+}

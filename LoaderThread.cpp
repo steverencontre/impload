@@ -30,11 +30,11 @@
 */
 
 LoaderThread::LoaderThread (QObject *parent, std::atomic<int>& absnum)
-  :
+:
 	QThread {parent},
 	m_AbsNum {absnum}
-  {
-  }
+{
+}
 
 
 /*
@@ -42,81 +42,86 @@ LoaderThread::LoaderThread (QObject *parent, std::atomic<int>& absnum)
 */
 
 void LoaderThread::run()
-  {
-	connect (this, SIGNAL (sig_FileCount(uint)), parent(), SLOT (FileCount(uint)), Qt::QueuedConnection);
-	connect (this, SIGNAL (sig_NewThumbnail (unsigned, const void *, unsigned, int)), parent(), SLOT (NewThumbnail (unsigned, const void *, unsigned, int)), Qt::QueuedConnection);
-	connect (this, SIGNAL (sig_ThumbnailsDone()), parent(), SLOT (ThumbnailsDone()), Qt::QueuedConnection);
-	connect (this, SIGNAL (sig_SavedOne(uint,bool)), parent(), SLOT (SavedOne(uint,bool)), Qt::QueuedConnection);
-	connect (this, SIGNAL (sig_SavedAll()), parent(), SLOT (SavedAll()), Qt::QueuedConnection);
+{
+    connect (this, SIGNAL (sig_FileCount(uint)), parent(), SLOT (FileCount(uint)), Qt::QueuedConnection);
+    connect (this, SIGNAL (sig_NewThumbnail (unsigned, const void *, unsigned, int)), parent(), SLOT (NewThumbnail (unsigned, const void *, unsigned, int)), Qt::QueuedConnection);
+    connect (this, SIGNAL (sig_ThumbnailsDone()), parent(), SLOT (ThumbnailsDone()), Qt::QueuedConnection);
+    connect (this, SIGNAL (sig_SavedOne(uint,bool)), parent(), SLOT (SavedOne(uint,bool)), Qt::QueuedConnection);
+    connect (this, SIGNAL (sig_SavedAll()), parent(), SLOT (SavedAll()), Qt::QueuedConnection);
 
-	connect (parent(), SIGNAL (sig_Save (const char *, const char *, unsigned)), SLOT (Save (const char *, const char *, unsigned)));
+    connect (parent(), SIGNAL (sig_Save (const char *, const char *, unsigned, unsigned)), SLOT (Save (const char *, const char *, unsigned, unsigned)));
 
-	// get the file list from the camera
+    // get the file list from the camera
 
-	std::cout << "Getting camera file list..." << std::endl;
+    std::cout << "Getting camera file list..." << std::endl;
 
-	m_ImageSource->ScanFiles();
-	unsigned nfiles = m_ImageSource->Files ().size();
-	int orientation = 0;	// default if no EXIF override
+    m_ImageSource->ScanFiles();
+    unsigned nfiles = m_ImageSource->Files ().size();
 
-	std::cout << "Got " << nfiles << " files" << std::endl;
+    int orientation = 0;	// default if no EXIF override
 
-	emit sig_FileCount (nfiles);
+    std::cout << "Got " << nfiles << " files" << std::endl;
 
-	// send thumbnails to GUI
+    emit sig_FileCount (nfiles);
 
-	m_Mutex.lock();
+    // send thumbnails to GUI
 
-	for (unsigned i = 0; i < nfiles; ++i)
-	  {
-		auto [data, size, dt] = m_ImageSource->LoadData (i, ImageSource::THUMB);
+    m_Mutex.lock();
 
-		// check for portrait-mode rotation -- doesn't work at present!
-//		orientation = Metadata {data, size}.Orientation();
+    for (unsigned i = 0; i < nfiles; ++i)
+    {
+        auto [data, size, dt] = m_ImageSource->LoadData (i, ImageSource::THUMB);
 
-		std::cout << m_ImageSource->Files() [i].name << std::endl;
+        // check for portrait-mode rotation -- doesn't work at present!
+    //		orientation = Metadata {data, size}.Orientation();
 
-		emit sig_NewThumbnail (i, data, size, orientation);
-		m_WaitCondition.wait (&m_Mutex);	// wait until GUI has handled previous thumbnail
-	  }
+        std::cout << m_ImageSource->Files() [i].name << std::endl;
 
-	emit sig_ThumbnailsDone();
+        emit sig_NewThumbnail (i, data, size, orientation);
+        m_WaitCondition.wait (&m_Mutex);	// wait until GUI has handled previous thumbnail
+    }
 
-	// now wait until GUI signals to save or pack up
+    emit sig_ThumbnailsDone();
 
-	m_WaitCondition.wait (&m_Mutex);
+    // now wait until GUI signals to save or pack up
 
-	if (!m_SavePath.empty())
-	  {
-		for (unsigned i = m_First; i < nfiles; ++i)
-		  {
-			try
-			{
-				bool ok = m_ImageSource->SaveFile (i, m_Tag, m_SavePath, m_AbsNum++);
-				emit sig_SavedOne (i, ok);
-			}
-			catch (const std::exception& e)
-			{
-				std::cout << "Image save error " << e.what() << std::endl;
-			}
-		  }
-	  }
+    m_WaitCondition.wait (&m_Mutex);
 
-	m_Mutex.unlock();
+    if (!m_SavePath.empty())
+    {
+        if (m_Last > 0 && m_Last < nfiles)
+            nfiles = m_Last;
 
-	emit sig_SavedAll();
-  }
+        for (unsigned i = m_First; i < nfiles; ++i)
+        {
+            try
+            {
+                bool ok = m_ImageSource->SaveFile (i, m_Tag, m_SavePath, m_AbsNum++);
+                emit sig_SavedOne (i, ok);
+            }
+            catch (const std::exception& e)
+            {
+                std::cout << "Image save error " << e.what() << std::endl;
+            }
+        }
+    }
+
+    m_Mutex.unlock();
+
+    emit sig_SavedAll();
+}
 
 
 /*
 	Save
 */
 
-void  LoaderThread::Save (const char *tag, const char *path, unsigned first)
-  {
-	m_Tag.assign (tag);
-	m_SavePath.assign (path);
-	m_First = first;
+void  LoaderThread::Save (const char *tag, const char *path, unsigned first, unsigned last)
+{
+    m_Tag.assign (tag);
+    m_SavePath.assign (path);
+    m_First = first;
+    m_Last = last;
 
-	Continue();
-  }
+    Continue();
+}

@@ -40,10 +40,11 @@ namespace Ui {
 
 struct CameraInfo
   {
-	std::string		serial;
-	std::string		type;
-	std::string		tag;
-	double			timerr;
+    std::string		serial;
+    std::string		type;
+    std::string		tag;
+    time_t                  last;
+    double		timerr;
   };
 
 //typedef std::map <std::string, CameraInfo> CameraInfoMap;
@@ -53,19 +54,19 @@ class MainWindow : public QMainWindow
 	Q_OBJECT
 
 public:
-	explicit MainWindow (bool folder_mode, const std::string& start, double timeshift);
+    explicit MainWindow (const std::string& folder, double timeshift, time_t since);
 	~MainWindow();
 
 	bool	  GotValidSource()	{ return m_Source != nullptr; }
 
 signals:
-	void sig_Save (const char *tag, const char *path, unsigned first = 0);
+    void sig_Save (const char *tag, const char *path, unsigned first, unsigned last);
 
 public slots:
 	void FileCount (unsigned nfiles);
 	void NewThumbnail (unsigned index, const void *data, unsigned size, int orientation);
 	void ThumbnailsDone();
-	void SetFirst (unsigned first) { m_First = first; }
+    void SetRange (unsigned index, bool is_last) { (is_last ? m_Last : m_First) = index; }
 	void Save();
 	void SavedOne (unsigned index, bool ok);
 	void SavedAll();
@@ -78,25 +79,26 @@ private slots:
 	void on_actionInfo_triggered();
 
 private:
-	bool	GetCameraSource();
-	bool	GetFolderSource (const std::string& start);
+    bool	GetCameraSource();
+    bool	GetFolderSource (const std::string& start);
 
 
-	virtual void closeEvent (QCloseEvent *e)  { m_Loader.Continue(); QMainWindow::closeEvent (e); }
+    virtual void closeEvent (QCloseEvent *e)  { m_Loader.Continue(); QMainWindow::closeEvent (e); }
 
-	Ui::MainWindow	  *ui;
+    Ui::MainWindow	  *ui;
 
-	LoaderThread			m_Loader;
-	ImageSource		  *m_Source {nullptr};
-	CameraInfo			m_CameraInfo;
-	std::string				m_DestinationBase;
-	unsigned				m_First {0};
-	unsigned				m_Total {0};
-	unsigned				m_ThumbnailRows;
-	unsigned				m_ThumbnailColums;
-	std::string				m_ConfigName;
-	YAML::Node			m_Config;
-	std::atomic<int>	m_AbsNum;
+    LoaderThread			m_Loader;
+    ImageSource		  *m_Source {nullptr};
+    CameraInfo			m_CameraInfo;
+    std::string				m_DestinationBase;
+    unsigned				m_First {0};
+    unsigned				m_Last {0};
+    unsigned				m_Total {0};
+    unsigned				m_ThumbnailRows;
+    unsigned				m_ThumbnailColums;
+    std::string				m_ConfigName;
+    YAML::Node			m_Config;
+    std::atomic<int>	m_AbsNum;
 };
 
 #endif // MAINWINDOW_H

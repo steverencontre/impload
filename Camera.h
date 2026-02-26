@@ -24,92 +24,91 @@
 
 #include <string>
 #include <cassert>
-#include <iostream>
 
 #include "gphoto2.h"
 
-#include "CameraWidget.h"
 #include "ImageSource.h"
 
+
+//#include <chrono>
+//namespace chrono = std::chrono;
+//using time_point = chrono::time_point<chrono::system_clock>;
 
 // *** helpers *** //
 
 template <typename T>
 class Wrapper
-  {
-  public:
-	operator T *()	  { return m_Gp; }
-	unsigned		Count() const;
+{
+public:
+    operator T *()	  { return m_Gp; }
+    unsigned		Count() const;
 
-  protected:
-	Wrapper()		{ New(); }
-	~Wrapper()	{ Del(); }
+protected:
+    Wrapper()		{ New(); }
+    ~Wrapper()	{ Del(); }
 
-	T	  *m_Gp;
+    T	  *m_Gp;
 
-  private:
-	bool  New();
-	bool  Del();
-  };
+private:
+    bool  New();
+    bool  Del();
+};
 
 
 class PortInfoList : public Wrapper <gp::GPPortInfoList>
-  {
-  public:
-	PortInfoList()				{ gp::gp_port_info_list_load (m_Gp); }
+{
+public:
+    PortInfoList()				{ gp::gp_port_info_list_load (m_Gp); }
 
-//	void Append (gp::GPPortInfo inf) { gp::gp_port_info_list_append (m_Gp, inf); }
-  };
+    //	void Append (gp::GPPortInfo inf) { gp::gp_port_info_list_append (m_Gp, inf); }
+};
 
 
 class GLItemHelper
-  {
-  public:
-	GLItemHelper (gp::CameraList *clp, size_t i) : m_Clp (clp), m_Index (i) {}
+{
+public:
+    GLItemHelper (gp::CameraList *clp, size_t i) : m_Clp (clp), m_Index (i) {}
 
-	const char *Name()	{ const char *p; gp_list_get_name (m_Clp, m_Index, &p); return p; }
-	const char *Value()	{ const char *p; gp_list_get_value (m_Clp, m_Index, &p); return p; }
+    const char *Name()	{ const char *p; gp_list_get_name (m_Clp, m_Index, &p); return p; }
+    const char *Value()	{ const char *p; gp_list_get_value (m_Clp, m_Index, &p); return p; }
 
-  private:
-	gp::CameraList *m_Clp;
-	size_t				  m_Index;
-  };
+private:
+    gp::CameraList *m_Clp;
+    size_t				  m_Index;
+};
 
 // note, 'gp::CameraList' is a bit of a misnomer; it's not a list of cameras, so we rename it for our own use
 
 class GenericList : public Wrapper <gp::CameraList>
-  {
-  public:
-	GLItemHelper operator[] (size_t i)	{ return GLItemHelper (m_Gp, i); }
+{
+public:
+    GLItemHelper operator[] (size_t i)	{ return GLItemHelper (m_Gp, i); }
 
-	size_t size() const { return gp_list_count (m_Gp); }
-  };
+    size_t size() const { return gp_list_count (m_Gp); }
+};
 
 
 // _our_ CameraList is a list of cameras!
 
-class CameraList : public Wrapper <gp::CameraAbilitiesList>
-  {
-  public:
-	void Load (gp::GPContext *context)	{ gp_abilities_list_load (m_Gp, context);  }
-  };
+class CameraList : public Wrapper<gp::CameraAbilitiesList>
+{
+public:
+    void Load(gp::GPContext *context) { gp_abilities_list_load(m_Gp, context); }
+};
 
-
-class CameraFile : public Wrapper <gp::CameraFile>
-  {
-  };
-
+class CameraFile : public Wrapper<gp::CameraFile>
+{};
 
 namespace gp { inline int gp_file_count(gp::CameraFile *) { return 1; }	}	// ### dummy
 
 
 #define FUNCS(T, F)	  \
-	template<>	inline \
-	bool Wrapper<T>::New() { return gp::gp_##F##_new (&m_Gp); } \
-	template<>	inline \
-	bool Wrapper<T>::Del() { return gp::gp_##F##_free (m_Gp); } \
-	template<> inline \
-	unsigned Wrapper<T>::Count() const { auto n = gp::gp_##F##_count (m_Gp); assert (n >= 0); return unsigned (n); }
+    template<>	inline \
+    bool Wrapper<T>::New() { return gp::gp_##F##_new (&m_Gp); } \
+    template<>	inline \
+    bool Wrapper<T>::Del() { return gp::gp_##F##_free (m_Gp); } \
+    template<> inline \
+    unsigned Wrapper<T>::Count() const { auto n = gp::gp_##F##_count (m_Gp); assert (n >= 0); return unsigned (n); }
 
 FUNCS (gp::GPPortInfoList, port_info_list)
 FUNCS (gp::CameraList, list)
@@ -119,36 +118,35 @@ FUNCS (gp::CameraFile, file)
 
 //////////////////////////////////////////////
 
-
 class Camera : public ImageSource
-  {
-  public:
-	Camera();
-	~Camera() override;
+{
+public:
+    Camera();
+    ~Camera() override;
 
-	void				Select (unsigned i);
-	const std::string&	SerialNo() const		{ return m_SerialNo; }
-	const std::string&	Type() const			{ return m_Type; }
+    void Select(unsigned i);
+    const std::string &SerialNo() const { return m_SerialNo; }
+    const std::string &Type() const { return m_Type; }
 
-  private:
-	void				AddFiles (const std::string& base) override;
-	ImageData		LoadData (const std::string& folder, const std::string& name, DataType type) override;
+private:
+    void AddFiles(const std::string &base) override;
+    ImageData LoadData(const std::string &folder, const std::string &name, DataType type) override;
 
-	std::string			m_SerialNo;
-	std::string			m_Type;
+    std::string m_SerialNo;
+    std::string m_Type;
 
-	gp::Camera		    *	m_gpCamera;
-	gp::GPContext	    *	m_gpContext;
-	gp::CameraAbilities	m_gpAbilities;
-	gp::GPPortInfo		m_gpPortInfo;
-	gp::CameraWidget    *	m_gpConfig;
+    gp::Camera *m_gpCamera;
+    gp::GPContext *m_gpContext;
+    gp::CameraAbilities m_gpAbilities;
+    gp::GPPortInfo m_gpPortInfo;
+    gp::CameraWidget *m_gpConfig;
 
-	PortInfoList			m_PortInfoList;
-	GenericList			m_CameraFiles;
-	CameraFile			m_CameraFile;
+    PortInfoList m_PortInfoList;
+    GenericList m_CameraFiles;
+    CameraFile m_CameraFile;
 
-	static CameraList		s_CamerasSupported;
-	static GenericList		s_CamerasDetected;
-  };
+    static CameraList s_CamerasSupported;
+    static GenericList s_CamerasDetected;
+};
 
 #endif // CAMERA_H

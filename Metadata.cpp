@@ -37,65 +37,76 @@
 template<>
 QDateTime Metadata::Timestamp (const Exiv2::ExifData& ed)
 {
-	const Exiv2::ExifKey s_DTOKey {"Exif.Photo.DateTimeOriginal"};
-	const Exiv2::ExifKey s_SSOKey {"Exif.Photo.SubSecTimeOriginal"};
+    const Exiv2::ExifKey s_DTOKey {"Exif.Photo.DateTimeOriginal"};
+    const Exiv2::ExifKey s_SSOKey {"Exif.Photo.SubSecTimeOriginal"};
 
-	const Exiv2::ExifKey s_DTDKey {"Exif.Photo.DateTimeDigitized"};
-	const Exiv2::ExifKey s_SSDKey {"Exif.Photo.SubSecTimeDigitized"};
+    const Exiv2::ExifKey s_DTDKey {"Exif.Photo.DateTimeDigitized"};
+    const Exiv2::ExifKey s_SSDKey {"Exif.Photo.SubSecTimeDigitized"};
 
-	const Exiv2::ExifKey s_OSTKey {"Exif.Photo.OffsetTime"};
-	const Exiv2::ExifKey s_GTSKey ("Exif.GPSInfo.GPSTimeStamp");
+    const Exiv2::ExifKey s_OSTKey {"Exif.Photo.OffsetTime"};
+    const Exiv2::ExifKey s_GTSKey ("Exif.GPSInfo.GPSTimeStamp");
 
-	// get DateTimeOriginal if possible, else DateTimeDigitized
+    // get DateTimeOriginal if possible, else DateTimeDigitized
 
-	auto iter = ed.findKey (s_DTOKey);
-	auto ssiter = ed.findKey (s_SSOKey);
-	if (iter == ed.end())
-	{
-		iter = ed.findKey (s_DTDKey);
-		ssiter = ed.findKey (s_SSDKey);
-	}
-	if (iter == ed.end())
-	{
-		std::cout << "Can't find date/time in EXIF " << ed.count() << std::endl;
-		for (const auto& key : ed)
-			std::cout << key.key() << std::endl;
-		return QDateTime::fromSecsSinceEpoch(0);	// should flag it as weird
-	}
+    auto iter = ed.findKey (s_DTOKey);
+    auto ssiter = ed.findKey (s_SSOKey);
+    if (iter == ed.end())
+    {
+        iter = ed.findKey (s_DTDKey);
+        ssiter = ed.findKey (s_SSDKey);
+    }
+    if (iter == ed.end())
+    {
+        std::cout << "Can't find date/time in EXIF " << ed.count() << std::endl;
+        for (const auto& key : ed)
+            std::cout << key.key() << std::endl;
+        return QDateTime::fromSecsSinceEpoch(0);	// should flag it as weird
+    }
 
-	std::string dts = iter->getValue()->toString();
+    std::string dts = iter->getValue()->toString();
 
-	// get timezone offset if possible
+    // get timezone offset if possible
 
-	iter = ed.findKey (s_OSTKey);
-	if (iter != ed.end())						// got an explicit offset value
-		dts += iter->getValue()->toString();
-	else
-		dts += "Z";								// assume UTC unless we can deduce from GPS
+    iter = ed.findKey (s_OSTKey);
+    if (iter != ed.end())						// got an explicit offset value
+        dts += iter->getValue()->toString();
+    else
+        dts += "Z";								// assume UTC unless we can deduce from GPS
 
-	auto dt {QDateTime::fromString (QString::fromStdString (dts), Qt::ISODate)};
+    auto dt {QDateTime::fromString (QString::fromStdString (dts), Qt::ISODate)};
 
-	if (iter == ed.end())						// not explicit offset, GPS?
-	{
-		iter = ed.findKey (s_GTSKey);
-		if (iter != ed.end())
-		{
-			auto h = iter->toFloat (0);
-			auto m = iter->toFloat (1);
+    if (iter == ed.end())						// not explicit offset, GPS?
+    {
+        iter = ed.findKey (s_GTSKey);
+        if (iter != ed.end())
+        {
+            auto h = iter->toFloat (0);
+            auto m = iter->toFloat (1);
 
-			auto dh = dt.time().hour() - (int) h;
-			auto dm = dt.time().minute() - (int) m;
+            auto dh = dt.time().hour() - (int) h;
+            auto dm = dt.time().minute() - (int) m;
 
-			dm = ((dm + 7) / 15) * 15;		// round to nearest 15 min to get timezone offset (usually whole hours, sometimes half, _very_ occasionally quater)
+            dm = ((dm + 7) / 15) * 15;		// round to nearest 15 min to get timezone offset (usually whole hours, sometimes half, _very_ occasionally quater)
 
-			dt = dt.addSecs (-(dh * 3600 + dm * 60));
-		}
-	}
+            dt = dt.addSecs (-(dh * 3600 + dm * 60));
+        }
+    }
 
-	if (ssiter != ed.end())
-		dt = dt.addMSecs (ssiter->getValue()->toInt64());
+    if (ssiter != ed.end())                             // got subsecs
+    {
+        auto subsec_str {ssiter->getValue()->toString()};
+        int subsec = std::stoi (subsec_str);
+        int n = subsec_str.size();
 
-	return dt;
+        // assume the number of digits implies the precision - translate to ms
+        while (n++ < 3)
+            subsec *= 10;
+        while (n-- > 3)
+            subsec /= 10;
+
+        dt = dt.addMSecs (subsec);
+    }
+    return dt;
 }
 
 void MetadataOps::Orientation (int) {}	  // not presently used
@@ -107,112 +118,121 @@ void MetadataOps::Orientation (int) {}	  // not presently used
 class MetadataExiv2 : public MetadataOps
 {
 public:
-  MetadataExiv2 (const void *data, size_t size);
+    MetadataExiv2 (const void *data, size_t size);
 
-  QDateTime Timestamp() const override { return Metadata::Timestamp (m_ImagePtr->exifData()); }
-  void Timestamp (QDateTime) override;
+    QDateTime Timestamp() const override { return Metadata::Timestamp (m_ImagePtr->exifData()); }
+    void Timestamp (QDateTime) override;
 
-  int Orientation() const override;
-//  void Orientation (int) override;
+    int Orientation() const override;
+    //  void Orientation (int) override;
 
 private:
-  std::unique_ptr <Exiv2::Image> m_ImagePtr;
+    std::unique_ptr <Exiv2::Image> m_ImagePtr;
 };
-
 
 
 MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 {
-	enum ImageType { NONE, JPEG, CR2, BMFF, ORF };
+    enum ImageType { NONE, JPEG, CR2, BMFF, ORF, TIFF };
 
-	static ImageType expected_type {NONE};
-	ImageType type {NONE};
+    static ImageType expected_type {NONE};
+    ImageType type {NONE};
 
-	auto px = (const uint8_t *) data;
-	if (px[0] == 0xFF && px[1] == 0xD8)		// file is JPEG
-		type = JPEG;
-	else										// not JPEG, must be some kind of raw format for us to figure out
-		type = expected_type;
+    auto px = (const uint8_t *) data;
+    if (px[0] == 0xFF && px[1] == 0xD8)		// file is JPEG
+        type = JPEG;
+    else										// not JPEG, must be some kind of raw format for us to figure out
+        type = expected_type;
 
-	Exiv2::Image *image {nullptr};
+    Exiv2::Image *image {nullptr};
 
-	switch (type)
-	{
-	case JPEG:
-		image = new Exiv2::JpegImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
-		break;
+    switch (type)
+    {
+    case JPEG:
+        image = new Exiv2::JpegImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+        break;
 
-	case NONE:		// we'll just drop through until we find something that works
-	case CR2:
-		image = new Exiv2::Cr2Image (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
-		if (image->good())
-			expected_type = CR2;
+    case NONE:		// we'll just drop through until we find something that works
+    case CR2:
+        image = new Exiv2::Cr2Image (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+        if (image->good())
+            expected_type = CR2;
 
-		if (expected_type == NONE)	// once raw type has been set it should never change, so failure is only logically possible when type is unknown
-			[[fallthrough]];
-		else
-			break;
+        if (expected_type == NONE)	// once raw type has been set it should never change, so failure is only logically possible when type is unknown
+            [[fallthrough]];
+        else
+            break;
 
-	case BMFF:
-		image = new Exiv2::BmffImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
-		if (image->good())
-			expected_type = BMFF;
+    case BMFF:
+        image = new Exiv2::BmffImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+        if (image->good())
+            expected_type = BMFF;
 
-		if (expected_type == NONE)
-			[[fallthrough]];
-		else
-			break;
+        if (expected_type == NONE)
+            [[fallthrough]];
+        else
+            break;
 
-	case ORF:
-		image = new Exiv2::OrfImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
-		if (image->good())
-			expected_type = ORF;
-	}
+    case ORF:
+        image = new Exiv2::OrfImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+        if (image->good())
+            expected_type = ORF;
 
-	if (!image || !image->good())
-	{
-		std::cerr << "Unknown type or apparent change of raw type!" << std::endl;
-		throw std::runtime_error ("Image type error");
-	}
+        if (expected_type == NONE)
+            [[fallthrough]];
+        else
+            break;
 
-	m_ImagePtr.reset (image);
-	m_ImagePtr->readMetadata();
+    case TIFF:
+        image = new Exiv2::TiffImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+        if (image->good())
+            expected_type = TIFF;
+    }
 
-//	static const char *types[] { "NONE", "JPEG", "CR2", "BMFF", "ORF" };
-//	std::cout << "type " << types [type] << " exif " << m_ImagePtr->exifData().count() << std::endl;
+    if (!image || !image->good())
+    {
+        std::cerr << "Unknown type or apparent change of raw type!" << std::endl;
+        throw std::runtime_error ("Image type error");
+    }
+
+    m_ImagePtr.reset (image);
+    m_ImagePtr->readMetadata();
+
+    //	static const char *types[] { "NONE", "JPEG", "CR2", "BMFF", "ORF", "TIFF" };
+    //	std::cout << "type " << types [type] << " exif " << m_ImagePtr->exifData().count() << std::endl;
 }
 
 
 int MetadataExiv2::Orientation() const
 {
-	const Exiv2::ExifKey s_OrientationKey {"Exif.Image.Orientation"};
+    const Exiv2::ExifKey s_OrientationKey {"Exif.Image.Orientation"};
 
-	int orientation = 0;
+    int orientation = 0;
 
-	auto o = m_ImagePtr->exifData().findKey (s_OrientationKey);
-	if (o != m_ImagePtr->exifData().end())
-		orientation = o->value().toInt64();
+    auto o = m_ImagePtr->exifData().findKey (s_OrientationKey);
+    if (o != m_ImagePtr->exifData().end())
+        orientation = o->value().toInt64();
 
-	return orientation;
+    return orientation;
 }
 
 
 void MetadataExiv2::Timestamp (QDateTime dt)
 {
-	auto dtstr = dt.toString (Qt::ISODate).toStdString();
-	m_ImagePtr->exifData() ["Exif.Photo.DateTimeOriginal"] = dtstr;
-	m_ImagePtr->exifData() ["Exif.Photo.DateTimeDigitized"] = dtstr;
+    auto dtstr = dt.toString (Qt::ISODate).toStdString();
+    m_ImagePtr->exifData() ["Exif.Photo.DateTimeOriginal"] = dtstr;
+    m_ImagePtr->exifData() ["Exif.Photo.DateTimeDigitized"] = dtstr;
 
-	try
-	{
-		m_ImagePtr->writeMetadata();
-	}
-	catch (const std::exception& x)
-	{
-		std::cerr << x.what() << std::endl;
-	}
+    try
+    {
+        m_ImagePtr->writeMetadata();
+    }
+    catch (const std::exception& x)
+    {
+        std::cerr << x.what() << std::endl;
+    }
 
-  // #### write exif update
+    // #### write exif update
 }
 
 
@@ -225,45 +245,45 @@ using namespace MediaInfoLib;
 class MetadataMediaInfo	: public MetadataOps, private MediaInfo
 {
 public:
-  MetadataMediaInfo (const void *data, size_t size);
+    MetadataMediaInfo (const void *data, size_t size);
 
-  QDateTime Timestamp() const override;
-  void Timestamp (QDateTime) override {}
+    QDateTime Timestamp() const override;
+    void Timestamp (QDateTime) override {}
 
-  int Orientation() const override { return 0; }
-//  void Orientation (int) override;
+    int Orientation() const override { return 0; }
+    //  void Orientation (int) override;
 };
 
 
 MetadataMediaInfo::MetadataMediaInfo (const void *data, size_t size)
 {
-	auto x = Open ((ZenLib::int8u *) data, size);
-	std::cout << x << " 0x" << std::hex <<  x << std::dec << std::endl;
-	std::wcout << Inform() << std::endl;
+    auto x = Open ((ZenLib::int8u *) data, size);
+    std::cout << x << " 0x" << std::hex <<  x << std::dec << std::endl;
+    std::wcout << Inform() << std::endl;
 }
 
 QDateTime MetadataMediaInfo::Timestamp() const
 {
-	auto p = const_cast <MetadataMediaInfo *> (this);
+    auto p = const_cast <MetadataMediaInfo *> (this);
 
-	std::wstring param {L"Encoded_Date"};
-	QString sdate = QString::fromStdWString (p->Get (Stream_General, 0, param));
+    std::wstring param {L"Encoded_Date"};
+    QString sdate = QString::fromStdWString (p->Get (Stream_General, 0, param));
 
-	if (sdate.endsWith (" UTC"))
-	{
-		sdate.chop (4);
-		sdate += "Z";
-	}
+    if (sdate.endsWith (" UTC"))
+    {
+        sdate.chop (4);
+        sdate += "Z";
+    }
 
-	auto qdate {QDateTime::fromString (sdate, Qt::ISODate)};
+    auto qdate {QDateTime::fromString (sdate, Qt::ISODate)};
 
-	if (qdate.isNull() || !qdate.isValid())
-	{
-		std::cerr << "Couldn't translate '" << sdate.toStdString() << "' as date" << std::endl;
-		throw std::runtime_error ("MediaInfo date problem");
-	}
+    if (qdate.isNull() || !qdate.isValid())
+    {
+        std::cerr << "Couldn't translate '" << sdate.toStdString() << "' as date" << std::endl;
+        throw std::runtime_error ("MediaInfo date problem");
+    }
 
-	return qdate;
+    return qdate;
 }
 
 
@@ -273,8 +293,8 @@ QDateTime MetadataMediaInfo::Timestamp() const
 
 Metadata::Metadata (const void *data, size_t size, bool video)
 {
-	if (video)
-		m_Delegate = std::make_unique <MetadataMediaInfo> (data, size);
-	else
-		m_Delegate = std::make_unique <MetadataExiv2> (data, size);
+    if (video)
+        m_Delegate = std::make_unique <MetadataMediaInfo> (data, size);
+    else
+        m_Delegate = std::make_unique <MetadataExiv2> (data, size);
 }

@@ -22,7 +22,6 @@
 #define IMAGESOURCE_H
 
 #include <cstdint>
-#include <iostream>
 #include <vector>
 #include <string>
 #include <tuple>
@@ -32,44 +31,47 @@
 class ImageSource
 {
 public:
-	ImageSource();
-	virtual ~ImageSource() {}
+    ImageSource();
+    virtual ~ImageSource() {}
 
-	enum DataType { FULL, THUMB, EXIF, VIDEO, DATA_TYPES };
+    enum DataType { FULL, THUMB, EXIF, VIDEO, DATA_TYPES };
 
-	struct FileListItem
-	  {
-		std::string		folder;
-		std::string		name;
+    struct FileListItem
+      {
+        std::string		folder;
+        std::string		name;
 
-		bool operator< (const FileListItem& x) const { return name < x.name; }
-	  };
+        bool operator< (const FileListItem& x) const { return name < x.name; }
+      };
 
-	using ImageData = std::tuple<const uint8_t *, size_t, QDateTime>;
+    using ImageData = std::tuple<const uint8_t *, size_t, QDateTime>;
 
-	const std::vector <FileListItem>& Files() const		  { return m_Files; }
+    const std::vector <FileListItem>& Files() const		  { return m_Files; }
 
-	double	TimeOffset() const		{ return m_TimeOffset; }	// note that API allows for fractions of seconds
-	void		TimeOffset (double t)	{ m_TimeOffset = t; }		// allow manual override
-	ImageData		LoadData (unsigned index, DataType type);
-	bool				SaveFile (unsigned index, const std::string& tag, const std::string& path, unsigned absnum);
+    double            TimeOffset() const		{ return m_TimeOffset; }	// note that API allows for fractions of seconds
+    void                 TimeOffset (double t)	{ m_TimeOffset = t; }		// allow manual override
+    void                 Since (time_t since)         { m_Since = since; }
+    ImageData    LoadData (unsigned index, DataType type);
+    bool                SaveFile (unsigned index, const std::string& tag, const std::string& path, unsigned absnum);
 
-	void ScanFiles()
-	{
-		AddFiles (m_BaseDir);
-/*
-		for (const auto& item : m_Files)
-			std::cout << item.folder << " : " << item.name << std::endl;
-*/
-	}
+    void ScanFiles()
+    {
+        AddFiles (m_BaseDir);
+    /*
+        for (const auto& item : m_Files)
+            std::cout << item.folder << " : " << item.name << std::endl;
+    */
+    }
 
 protected:
 
-	virtual void			AddFiles (const std::string& base) = 0;
-	virtual ImageData		LoadData (const std::string& folder, const std::string& name, DataType type) = 0;
+    virtual void                    AddFiles (const std::string& base) = 0;
+    virtual ImageData       LoadData (const std::string& folder, const std::string& name, DataType type) = 0;
 
-	std::string					m_BaseDir;
-	std::vector <FileListItem>		m_Files;
-	time_t						m_TimeOffset {0};
+    std::string					m_BaseDir;
+    std::vector <FileListItem>	m_Files;
+    time_t						m_TimeOffset {0};
+    time_t                                          m_Since;
+
 };
 #endif // IMAGESOURCE_H

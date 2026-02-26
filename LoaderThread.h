@@ -33,31 +33,32 @@ class LoaderThread : public QThread
 {
 	Q_OBJECT
 public:
-	explicit	LoaderThread (QObject *parent, std::atomic<int>& absnum);
+    explicit	LoaderThread (QObject *parent, std::atomic<int>& absnum);
 
-	void		Prepare (ImageSource *source)	{ m_ImageSource = source; }
-	void		Continue()	{ m_WaitCondition.wakeAll(); }
+    void		Prepare (ImageSource *source)	{ m_ImageSource = source; }
+    void		Continue()	{ m_WaitCondition.wakeAll(); }
 
 signals:
-	void		sig_FileCount (unsigned nfiles);
-	void		sig_NewThumbnail (unsigned index, const void *data, unsigned size, int orientation);
-	void		sig_ThumbnailsDone();
-	void		sig_SavedOne (unsigned index, bool success);
-	void		sig_SavedAll();
+    void		sig_FileCount (unsigned nfiles);
+    void		sig_NewThumbnail (unsigned index, const void *data, unsigned size, int orientation);
+    void		sig_ThumbnailsDone();
+    void		sig_SavedOne (unsigned index, bool success);
+    void		sig_SavedAll();
 
 public slots:
-	void		Save (const char *tag, const char *path, unsigned first);
+    void		Save (const char *tag, const char *path, unsigned first, unsigned last);
 
 private:
-	void		run() override;
+    void		run() override;
 
-	QWaitCondition		m_WaitCondition;
-	QMutex					m_Mutex;
-	ImageSource		  *m_ImageSource {nullptr};
-	std::atomic<int>&	m_AbsNum;
-	std::string				m_Tag;
-	std::string				m_SavePath;
-	size_t					m_First;
+    QWaitCondition		m_WaitCondition;
+    QMutex					m_Mutex;
+    ImageSource		  *m_ImageSource {nullptr};
+    std::atomic<int>&	m_AbsNum;
+    std::string				m_Tag;
+    std::string				m_SavePath;
+    size_t					m_First;
+    size_t					m_Last;
 };
 
 #endif // LOADERTHREAD_H

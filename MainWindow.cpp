@@ -38,50 +38,54 @@
 	ctor
 */
 
-MainWindow::MainWindow (bool folder_mode, const std::string& start_folder, double timeshift)
+MainWindow::MainWindow (const std::string& folder, double timeshift, time_t since)
 :
-	ui {new Ui::MainWindow},
-	m_Loader {this, m_AbsNum}
+    ui {new Ui::MainWindow},
+    m_Loader {this, m_AbsNum}
 {
-	ui->setupUi (this);
+    ui->setupUi (this);
 
-	m_ConfigName = QStandardPaths::writableLocation (QStandardPaths::AppConfigLocation).toStdString() + ".config.yaml";
+    m_ConfigName = QStandardPaths::writableLocation (QStandardPaths::AppConfigLocation).toStdString() + ".config.yaml";
     m_Config = YAML::LoadFile (m_ConfigName);
-	m_AbsNum = m_Config ["General"] ["AbsNum"].as<int>();
+    m_AbsNum = m_Config ["General"] ["AbsNum"].as<int>();
 
-	bool ok = folder_mode ? GetFolderSource (start_folder) : GetCameraSource();
-	if (!ok)
-		return;
+    bool ok = !folder.empty() ? GetFolderSource (folder) : GetCameraSource();
+    if (!ok)
+        return;
 
-	if (timeshift)		// force override of setting deduced from camera current time
-	{
-		m_Source->TimeOffset (timeshift * 3600);
-		m_CameraInfo.timerr = m_Source->TimeOffset();
-	}
+    if (timeshift)		// force override of setting deduced from camera current time
+    {
+        m_Source->TimeOffset (timeshift * 3600);
+        m_CameraInfo.timerr = m_Source->TimeOffset();
+    }
 
-	// populate import details table
+    m_Source->Since (since);
 
-	m_DestinationBase = m_Config ["General"] ["BaseFolder"].as<std::string>();
+    m_CameraInfo.last = since - 1;
 
-	ui->wImportDetails->setItem (0, 0, new QTableWidgetItem (QString::fromStdString (m_CameraInfo.type)));
-	ui->wImportDetails->setItem (0, 1, new QTableWidgetItem (QString::fromStdString (m_CameraInfo.tag)));
-	ui->wImportDetails->setItem (0, 2, new QTableWidgetItem (QString::fromStdString (m_DestinationBase)));
-	ui->wImportDetails->resizeColumnsToContents();
+    // populate import details table
 
-	// start the loader thread
+    m_DestinationBase = m_Config ["General"] ["BaseFolder"].as<std::string>();
 
-	m_Loader.Prepare (m_Source);
-	m_Loader.start();
+    ui->wImportDetails->setItem (0, 0, new QTableWidgetItem (QString::fromStdString (m_CameraInfo.type)));
+    ui->wImportDetails->setItem (0, 1, new QTableWidgetItem (QString::fromStdString (m_CameraInfo.tag)));
+    ui->wImportDetails->setItem (0, 2, new QTableWidgetItem (QString::fromStdString (m_DestinationBase)));
+    ui->wImportDetails->resizeColumnsToContents();
 
-	connect (ui->wImagePreview, SIGNAL (sig_SetFirst(uint)), this, SLOT (SetFirst(uint)));
+    // start the loader thread
 
-	// connect save button
+    m_Loader.Prepare (m_Source);
+    m_Loader.start();
 
-	connect (ui->buttonBox, SIGNAL (accepted()), SLOT (Save()));
+    connect (ui->wImagePreview, SIGNAL (sig_SetRange(uint,bool)), this, SLOT (SetRange(uint,bool)));
 
-	// disable buttons for the moment
+    // connect save button
 
-	ui->buttonBox->setEnabled (false);
+    connect (ui->buttonBox, SIGNAL (accepted()), SLOT (Save()));
+
+    // disable buttons for the moment
+
+    ui->buttonBox->setEnabled (false);
 }
 
 
@@ -91,13 +95,15 @@ MainWindow::MainWindow (bool folder_mode, const std::string& start_folder, doubl
 
 MainWindow::~MainWindow()
 {
-	m_Config ["General"] ["AbsNum"] = (int) m_AbsNum;
+    m_Config ["General"] ["AbsNum"] = (int) m_AbsNum;
+    if (!m_CameraInfo.serial.empty())
+        m_Config ["Cameras"] [m_CameraInfo.serial] ["last"] = time (nullptr);
 
-	std::ofstream outf {m_ConfigName};
-	outf << "%YAML 1.2\n"	"# Impload configuration\n" "---\n" << m_Config;
+    std::ofstream outf {m_ConfigName};
+    outf << "%YAML 1.2\n"	"# Impload configuration\n" "---\n" << m_Config;
 
-	delete m_Source;
-	delete ui;
+    delete m_Source;
+    delete ui;
 }
 
 
@@ -107,19 +113,19 @@ MainWindow::~MainWindow()
 
 bool MainWindow::GetFolderSource (const std::string& start)
 {
-	try
-	{
-		auto pfolder = new Folder (start);
-		m_Source = pfolder;
-		m_CameraInfo = CameraInfo {"", "Folder", "", 0};
-	}
-	catch (std::exception&)
-	{
-		return false;
-	}
+    try
+    {
+        auto pfolder = new Folder (start);
+        m_Source = pfolder;
+        m_CameraInfo = CameraInfo {"", "Folder", "", 0, 0};
+    }
+    catch (std::exception&)
+    {
+        return false;
+    }
 
 
-	return true;
+    return true;
 }
 
 
@@ -129,46 +135,56 @@ bool MainWindow::GetFolderSource (const std::string& start)
 
 bool MainWindow::GetCameraSource()
 {
-	// create gphoto2 camera object
+    // create gphoto2 camera object
 
-	Camera *pcam {nullptr};
+    Camera *pcam {nullptr};
 
-	while (!pcam)
-	{
-		try
-		{
-			pcam = new Camera;
-		}
-		catch (const std::exception&)
-		{
-			int ret = QMessageBox (QMessageBox::Warning, "impload",
-								   "No cameras were detected. Please check connections and power",
-								   QMessageBox::Retry | QMessageBox::Cancel
-								   ).exec();
+    while (!pcam)
+    {
+        try
+        {
+            pcam = new Camera;
+        }
+        catch (const std::exception&)
+        {
+            int ret = QMessageBox (QMessageBox::Warning, "impload",
+                                   "No cameras were detected. Please check connections and power",
+                                   QMessageBox::Retry | QMessageBox::Cancel
+                                   ).exec();
 
-			if (ret == QMessageBox::Cancel)
-				return false;
-		}
-	}
+            if (ret == QMessageBox::Cancel)
+                return false;
+        }
+    }
 
-	// in principle we could have more than one camera connected, but that's not implemented for now
-	pcam->Select (0);
+    // in principle we could have more than one camera connected, but that's not implemented for now
+    pcam->Select (0);
 
-	auto node = m_Config ["Cameras"] [pcam->SerialNo()];
+    auto node = m_Config ["Cameras"] [pcam->SerialNo()];
 
-	m_CameraInfo.serial = pcam->SerialNo();
-	m_CameraInfo.type = pcam->Type();
-	try
-	{
-		m_CameraInfo.tag = node ["tag"].as<std::string>();
-	}
-	catch (...)
-	{
-		m_CameraInfo.tag = "???";
-	}
-	m_Source = pcam;
+    m_CameraInfo.serial = pcam->SerialNo();
+    m_CameraInfo.type = pcam->Type();
+    try
+    {
+        m_CameraInfo.tag = node ["tag"].as<std::string>();
+    }
+    catch (...)
+    {
+        m_CameraInfo.tag = "???";
+    }
 
-	return true;
+    if (m_CameraInfo.last != (time_t) -1)       // command line option overrides camera value
+    {
+        try
+        {
+            m_CameraInfo.last = node ["last"].as<time_t>();
+        }
+        catch (...) { }
+    }
+    m_Source = pcam;
+
+    m_Source->Since (m_CameraInfo.last);
+    return true;
 }
 
 
@@ -177,12 +193,12 @@ bool MainWindow::GetCameraSource()
 */
 
 void MainWindow::on_wImportDetails_cellDoubleClicked (int row, int column)
-  {
-	if (row != 0 || column == 0)
-		return;
+{
+    if (row != 0 || column == 0)
+        return;
 
-	ui->wImportDetails->editItem (ui->wImportDetails->currentItem());
-  }
+    ui->wImportDetails->editItem (ui->wImportDetails->currentItem());
+}
 
 
 /*
@@ -191,21 +207,21 @@ void MainWindow::on_wImportDetails_cellDoubleClicked (int row, int column)
 
 void MainWindow::on_wImportDetails_cellChanged (int row, int column)
 {
-	if (row != 0)
-		return;
+    if (row != 0)
+        return;
 
-	QString text = ui->wImportDetails->item (row, column)->text();
+    QString text = ui->wImportDetails->item (row, column)->text();
 
-	if (column == 1)
-	{
-		m_CameraInfo.tag = text.toStdString();
-		m_Config ["Cameras"] [m_CameraInfo.serial] ["tag"] = m_CameraInfo.tag;
-	}
-	else if (column == 2)
-	{
-		m_DestinationBase = text.toStdString();
-		m_Config ["General"] ["BaseFolder"] = m_DestinationBase;
-	}
+    if (column == 1)
+    {
+        m_CameraInfo.tag = text.toStdString();
+        m_Config ["Cameras"] [m_CameraInfo.serial] ["tag"] = m_CameraInfo.tag;
+    }
+    else if (column == 2)
+    {
+        m_DestinationBase = text.toStdString();
+        m_Config ["General"] ["BaseFolder"] = m_DestinationBase;
+    }
 }
 
 
@@ -214,13 +230,13 @@ void MainWindow::on_wImportDetails_cellChanged (int row, int column)
 */
 
 void MainWindow::FileCount (unsigned nfiles)
-  {
-	m_Total = nfiles;
+{
+    m_Total = nfiles;
 
-	ui->wProgressBar->setMinimum (0);
-	ui->wProgressBar->setMaximum (m_Total);
-	ui->wProgressBar->setValue (0);
-  }
+    ui->wProgressBar->setMinimum (0);
+    ui->wProgressBar->setMaximum (m_Total);
+    ui->wProgressBar->setValue (0);
+}
 
 
 
@@ -229,11 +245,11 @@ void MainWindow::FileCount (unsigned nfiles)
 */
 
 void MainWindow::NewThumbnail (unsigned index, const void *data, unsigned size, int orientation)
-  {
-	ui->wImagePreview->Add (data, size, orientation);
-	ui->wProgressBar->setValue ((int) index + 1);
-	m_Loader.Continue();
-  }
+{
+    ui->wImagePreview->Add (data, size, orientation);
+    ui->wProgressBar->setValue ((int) index + 1);
+    m_Loader.Continue();
+}
 
 
 /*
@@ -241,9 +257,9 @@ void MainWindow::NewThumbnail (unsigned index, const void *data, unsigned size, 
 */
 
 void MainWindow::ThumbnailsDone()
-  {
-	ui->buttonBox->setEnabled (true);
-  }
+{
+    ui->buttonBox->setEnabled (true);
+}
 
 
 /*
@@ -251,12 +267,14 @@ void MainWindow::ThumbnailsDone()
 */
 
 void MainWindow::Save()
-  {
-	ui->wProgressBar->setMinimum (m_First);
-	ui->wProgressBar->setValue (0);
+{
+    ui->wProgressBar->setMinimum (m_First);
+    if (m_Last)
+        ui->wProgressBar->setMaximum (m_Last);
+    ui->wProgressBar->setValue (0);
 
-	emit sig_Save (m_CameraInfo.tag.c_str(), m_DestinationBase.c_str(), m_First);
-  }
+    emit sig_Save (m_CameraInfo.tag.c_str(), m_DestinationBase.c_str(), m_First, m_Last);
+}
 
 
 /*
@@ -264,10 +282,10 @@ void MainWindow::Save()
 */
 
 void MainWindow::SavedOne (unsigned index, bool ok)
-  {
+{
 	ui->wImagePreview->Saved (index, ok);
 	ui->wProgressBar->setValue (int (index + 1));
-  }
+}
 
 
 /*
@@ -275,9 +293,9 @@ void MainWindow::SavedOne (unsigned index, bool ok)
 */
 
 void MainWindow::SavedAll()
-  {
+{
 	QCoreApplication::quit();
-  }
+}
 
 
 /*
@@ -285,18 +303,18 @@ void MainWindow::SavedAll()
 */
 
 void MainWindow::on_AddFiles_triggered()
-  {
+{
 	QMessageBox (QMessageBox::Warning, "impload",
-				"Function is not yet implemented",
+                "Function is not yet implemented, use -f command line parameter",
 				QMessageBox::Ok
 				).exec();
 
 //	QString addtree = QFileDialog::getExistingDirectory (this, "Choose directory containing files to add");
 
-  }
+}
 
 void MainWindow::on_actionInfo_triggered()
-  {
+{
 	QString text {"Not currently used"};//= QString ("time error: %1").arg (m_CameraInfo->timerr);
 
 	QMessageBox (QMessageBox::Information, "impload",
@@ -304,4 +322,4 @@ void MainWindow::on_actionInfo_triggered()
 		QMessageBox::Ok
 		).exec();
 
-  }
+}

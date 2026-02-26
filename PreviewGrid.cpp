@@ -24,6 +24,7 @@
 #include <QImage>
 #include <QPixmap>
 #include <QLabel>
+#include <QGuiApplication>
 
 #include <iostream>
 
@@ -38,15 +39,15 @@ const int IMAGESIZE = 96;		  // number of pixels for image previews
 */
 
 PreviewGrid::PreviewGrid (QWidget *parent)
-  :
+:
 	QTableWidget (parent),
 	m_Count (0)
-  {
+{
 	m_RotateCW.rotate (-90);
 	m_RotateCCW.rotate (90);
 
 	connect (this, SIGNAL (cellClicked (int, int)), this, SLOT (CellClicked (int, int)));
-  }
+}
 
 
 /*
@@ -54,9 +55,9 @@ PreviewGrid::PreviewGrid (QWidget *parent)
 */
 
 PreviewGrid::~PreviewGrid()
-  {
+{
 	disconnect (SIGNAL (cellClicked (int, int)));
-  }
+}
 
 
 /*
@@ -136,9 +137,9 @@ void PreviewGrid::Add (const void *data, unsigned size, int orientation)
 */
 
 void PreviewGrid::Saved (unsigned /*index*/, bool /*ok*/)
-  {
+{
 	// presently does nothing
-  }
+}
 
 
 /*
@@ -146,23 +147,23 @@ void PreviewGrid::Saved (unsigned /*index*/, bool /*ok*/)
 */
 
 void PreviewGrid::resizeEvent (QResizeEvent *ev)
-  {
-	QTableWidget::resizeEvent (ev);
+{
+    QTableWidget::resizeEvent (ev);
 
-	int nx = columnCount();
+    int nx = columnCount();
 
-	if (nx == 0)
-	  {
-		int w = width();
+    if (nx == 0)
+    {
+        int w = width();
 
-		nx = w / IMAGESIZE;
+        nx = w / IMAGESIZE;
 
-		setColumnCount (nx);
+        setColumnCount (nx);
 
-		for (int i = 0; i < nx; ++i)
-			setColumnWidth (i, IMAGESIZE);
-	  }
-   }
+        for (int i = 0; i < nx; ++i)
+            setColumnWidth (i, IMAGESIZE);
+    }
+}
 
 
 /*
@@ -170,21 +171,34 @@ void PreviewGrid::resizeEvent (QResizeEvent *ev)
 */
 
 void PreviewGrid::CellClicked (int r, int c)
-  {
-	int nx = columnCount();
+{
+    int nx = columnCount();
 
-	int index = r * nx + c;
+    int index = r * nx + c;
 
-	for (int i = 0; i  < m_Count; ++i)
-	{
-		r = i / nx;
-		c = i % nx;
-		auto pcw = cellWidget (r, c);
-		if (pcw)
-			pcw->setEnabled (i >= index);
-		else
-			std::cout << "index " << i << " ("  << r << "," << c << ") has no widget\n";
-	}
-	emit sig_SetFirst (index);
-  }
+    bool shift = QGuiApplication::queryKeyboardModifiers() & Qt::ShiftModifier;
+    if (shift)
+    {
+        for (int i = index; i  < m_Count; ++i)
+        {
+            r = i / nx;
+            c = i % nx;
+            cellWidget (r, c)->setEnabled (false);
+        }
+    }
+    else
+    {
+        for (int i = 0; i  < m_Count; ++i)
+        {
+            r = i / nx;
+            c = i % nx;
+            auto pcw = cellWidget (r, c);
+            if (pcw)
+                pcw->setEnabled (i >= index);
+            else
+                std::cout << "index " << i << " ("  << r << "," << c << ") has no widget\n";
+        }
+    }
+    emit sig_SetRange (index, shift);
+}
 

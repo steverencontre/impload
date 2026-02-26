@@ -19,10 +19,8 @@
 */
 #include <stdexcept>
 #include <filesystem>
-#include <iostream>
 
 #include <QFileDialog>
-
 
 #include <fcntl.h>
 
@@ -30,19 +28,17 @@
 #include "Metadata.h"
 
 
-
 Folder::Folder (const std::string& start)
 {
-	m_BaseDir = QFileDialog::getExistingDirectory (nullptr, "Import images from", QString::fromStdString (start)).toStdString();
+    m_BaseDir = QFileDialog::getExistingDirectory (nullptr, "Import images from", QString::fromStdString (start)).toStdString();
 
-	if (m_BaseDir.empty())
-		throw std::runtime_error ("no folder selected");
+    if (m_BaseDir.empty())
+        throw std::runtime_error ("no folder selected");
 }
 
 
 Folder::~Folder()
 {
-
 }
 
 
@@ -52,24 +48,24 @@ Folder::~Folder()
 
 void	Folder::AddFiles (const std::string& base)
 {
-	std::filesystem::directory_iterator dirit {base};
+    std::filesystem::directory_iterator dirit {base};
 
-	for (const auto& file : dirit)
-	{
-		if (file.is_directory())
-			AddFiles (file.path().string());
-		else
-		{
-			auto name {file.path().filename().string()};
-			auto ext {file.path().extension().string()};
-			if
-			(
-				name [0] != '.' &&
-				(ext == ".JPG" || ext == ".jpg" || ext == ".JPEG" || ext == ".jpeg")
-			)
-				m_Files.emplace_back (FileListItem {base, file.path().filename().string()});
-		}
-	}
+    for (const auto& file : dirit)
+    {
+        if (file.is_directory())
+            AddFiles (file.path().string());
+        else
+        {
+            auto name {file.path().filename().string()};
+            auto ext {file.path().extension().string()};
+            if
+            (
+                name [0] != '.' /*&&
+                (ext == ".JPG" || ext == ".jpg" || ext == ".JPEG" || ext == ".jpeg") */
+            )
+                m_Files.emplace_back (FileListItem {base, file.path().filename().string()});
+        }
+    }
 }
 
 
@@ -90,7 +86,6 @@ ImageSource::ImageData Folder::LoadData (const std::string& folder, const std::s
 	close (fd);
 
 	Metadata m {m_SharedBuffer.data(), size, type == VIDEO};
-
 
 	QDateTime dt {m.Timestamp()};
 //	if (type == THUMB)
