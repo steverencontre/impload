@@ -25,6 +25,7 @@
 #include <QFileDialog>
 #include <QStandardPaths>
 #include <QDebug>
+#include <QString>
 
 #include <fstream>
 
@@ -46,7 +47,20 @@ MainWindow::MainWindow (const std::string& folder, double timeshift, time_t sinc
     ui->setupUi (this);
 
     m_ConfigName = QStandardPaths::writableLocation (QStandardPaths::AppConfigLocation).toStdString() + ".config.yaml";
-    m_Config = YAML::LoadFile (m_ConfigName);
+    try
+    {
+        m_Config = YAML::LoadFile (m_ConfigName);
+    }
+    catch (...)
+    {
+        int ret = QMessageBox {QMessageBox::Warning, "impload",
+            QString::fromStdString (m_ConfigName) + " not found or not valid. Unless this is the first time you've ever run impload, something is probably wrong",
+            QMessageBox::Ignore | QMessageBox::Abort
+        }.exec();
+
+        if (ret == QMessageBox::Abort)
+            QApplication::exit (1);
+    }
     m_AbsNum = m_Config ["General"] ["AbsNum"].as<int>();
 
     bool ok = !folder.empty() ? GetFolderSource (folder) : GetCameraSource();

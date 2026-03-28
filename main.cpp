@@ -25,47 +25,56 @@
 
 #include "MainWindow.h"
 
+#include <iostream>
 
 int main (int argc, char *argv[])
 {
-    QApplication a (argc, argv);
-    a.setOrganizationName ("RSN Technology");
-    a.setApplicationName ("impload");
+	QApplication a (argc, argv);
+	a.setOrganizationName ("RSN Technology");
+	a.setApplicationName ("impload");
 
-    QCommandLineParser parser;
-    parser.setApplicationDescription ("Import images from camera or file folder");
-    parser.addHelpOption();
-    parser.addVersionOption();
+	QCommandLineParser parser;
+	parser.setApplicationDescription ("Import images from camera or file folder");
+	parser.addHelpOption();
+	parser.addVersionOption();
 
-    parser.addOptions
-    (
-        {
-            {{"t", "timeshift"}, "Add hours to EXIF timestamp (may be fractional or negative)", "timeshift"},
-            {{"s", "since"}, "Only add photos from this date/time (ISO format, UTC) onwards", "since"}
-        }
-    );
+	parser.addOptions
+	({
+		{{"t", "timeshift"}, "Add hours to EXIF timestamp (may be fractional or negative)", "timeshift"},
+		{{"s", "since"}, "Only add photos from this date/time (ISO format, UTC or 0=today, -N since N days ago) onwards", "since"}
+	});
 
-    parser.process(a);
+	parser.process(a);
 
-    auto list {parser.positionalArguments()};
-    std::string folder = list.empty() ? std::string {""} : list[0].toStdString();
+	auto list {parser.positionalArguments()};
+	std::string folder = list.empty() ? std::string {""} : list[0].toStdString();
 
-    double timeshift = parser.isSet ("timeshift") ? parser.value ("timeshift").toDouble() : 0;
-    time_t since {0};
+	double timeshift = parser.isSet ("timeshift") ? parser.value ("timeshift").toDouble() : 0;
+	time_t since {0};
 
-    if (parser.isSet ("since"))
-    {
-        QString t {parser.value ("since")};
-        auto s {QDateTime::fromString (t, Qt::ISODate)};
-        s.setTimeZone (QTimeZone::utc());
-        since = s.toSecsSinceEpoch() ;
-    }
-    MainWindow w {folder, timeshift, since};
+	if (parser.isSet ("since"))
+	{
+		QString t {parser.value ("since")};
 
-    if (!w.GotValidSource())
-        return -1;
+		QDateTime s;
 
-    w.show();
+		int n = t.toInt();
+		if (n <= 0)
+			s = QDateTime {QDate::currentDate().addDays (n), {}};
+		else
+			s = QDateTime::fromString (t, Qt::ISODate);
 
-    return a.exec();
+		s.setTimeZone (QTimeZone::utc());
+		since = s.toSecsSinceEpoch();
+
+		std::cout << "since " << s.toString(Qt::ISODate).toStdString() << std::endl;
+	}
+
+	MainWindow w {folder, timeshift, since};
+	if (!w.GotValidSource())
+		return -1;
+
+	w.show();
+
+	return a.exec();
 }

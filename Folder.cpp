@@ -19,6 +19,7 @@
 */
 #include <stdexcept>
 #include <filesystem>
+#include <iostream>
 
 #include <QFileDialog>
 
@@ -59,10 +60,10 @@ void	Folder::AddFiles (const std::string& base)
             auto name {file.path().filename().string()};
             auto ext {file.path().extension().string()};
             if
-            (
-                name [0] != '.' /*&&
+                (
+                    name [0] != '.' /*&&
                 (ext == ".JPG" || ext == ".jpg" || ext == ".JPEG" || ext == ".jpeg") */
-            )
+                    )
                 m_Files.emplace_back (FileListItem {base, file.path().filename().string()});
         }
     }
@@ -75,22 +76,30 @@ void	Folder::AddFiles (const std::string& base)
 
 ImageSource::ImageData Folder::LoadData (const std::string& folder, const std::string& name, DataType type)
 {
-	m_CurrentFile = folder + "/" + name;
+    m_CurrentFile = folder + "/" + name;
 
-	int fd = open (m_CurrentFile.c_str(), O_RDONLY);
-	size_t size = lseek (fd, 0, SEEK_END);
-	lseek (fd, 0, SEEK_SET);
+    int fd = open (m_CurrentFile.c_str(), O_RDONLY);
+    size_t size = lseek (fd, 0, SEEK_END);
+    lseek (fd, 0, SEEK_SET);
 
-	m_SharedBuffer.resize (size);
-	read (fd, m_SharedBuffer.data(), size);		// inefficient if we just want thumbnail, but leave for future enhancement
-	close (fd);
+    m_SharedBuffer.resize (size);
+    read (fd, m_SharedBuffer.data(), size);		// inefficient if we just want thumbnail, but leave for future enhancement
+    close (fd);
 
-	Metadata m {m_SharedBuffer.data(), size, type == VIDEO};
+    try
+    {
+        Metadata m {m_SharedBuffer.data(), size, type == VIDEO};
 
-	QDateTime dt {m.Timestamp()};
-//	if (type == THUMB)
+        QDateTime dt {m.Timestamp()};
+        //	if (type == THUMB)
 
-	return {m_SharedBuffer.data(), size, dt};
+        return {m_SharedBuffer.data(), size, dt};
+    }
+    catch (std::runtime_error&)
+    {
+        std::cerr << "Failed to interpret " << m_CurrentFile << " as image or video data\n";
+        return {nullptr, 0, {}};
+    }
 }
 
 

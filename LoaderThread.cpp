@@ -20,6 +20,8 @@
 
 #include <QSettings>
 #include <QFile>
+#include <QGuiApplication>
+#include <QCursor>
 
 #include "LoaderThread.h"
 
@@ -53,6 +55,8 @@ void LoaderThread::run()
 
     // get the file list from the camera
 
+    QGuiApplication::setOverrideCursor (Qt::WaitCursor);
+
     std::cout << "Getting camera file list..." << std::endl;
 
     m_ImageSource->ScanFiles();
@@ -71,6 +75,8 @@ void LoaderThread::run()
     for (unsigned i = 0; i < nfiles; ++i)
     {
         auto [data, size, dt] = m_ImageSource->LoadData (i, ImageSource::THUMB);
+        if (!data)      // duff image data, ignore
+            continue;
 
         // check for portrait-mode rotation -- doesn't work at present!
     //		orientation = Metadata {data, size}.Orientation();
@@ -81,11 +87,14 @@ void LoaderThread::run()
         m_WaitCondition.wait (&m_Mutex);	// wait until GUI has handled previous thumbnail
     }
 
+    QGuiApplication::restoreOverrideCursor();
     emit sig_ThumbnailsDone();
 
     // now wait until GUI signals to save or pack up
 
     m_WaitCondition.wait (&m_Mutex);
+
+    QGuiApplication::setOverrideCursor (Qt::WaitCursor);
 
     if (!m_SavePath.empty())
     {
@@ -108,6 +117,7 @@ void LoaderThread::run()
 
     m_Mutex.unlock();
 
+    QGuiApplication::restoreOverrideCursor();
     emit sig_SavedAll();
 }
 

@@ -86,7 +86,7 @@ QDateTime Metadata::Timestamp (const Exiv2::ExifData& ed)
             auto dh = dt.time().hour() - (int) h;
             auto dm = dt.time().minute() - (int) m;
 
-            dm = ((dm + 7) / 15) * 15;		// round to nearest 15 min to get timezone offset (usually whole hours, sometimes half, _very_ occasionally quater)
+            dm = ((dm + 7) / 15) * 15;		// round to nearest 15 min to get timezone offset (usually whole hours, sometimes half, _very_ occasionally quarter)
 
             dt = dt.addSecs (-(dh * 3600 + dm * 60));
         }
@@ -99,11 +99,16 @@ QDateTime Metadata::Timestamp (const Exiv2::ExifData& ed)
         int n = subsec_str.size();
 
         // assume the number of digits implies the precision - translate to ms
-        while (n++ < 3)
+        while (n < 3)
+        {
             subsec *= 10;
-        while (n-- > 3)
+            ++n;
+        }
+        while (n > 3)
+        {
             subsec /= 10;
-
+            --n;
+        }
         dt = dt.addMSecs (subsec);
     }
     return dt;
