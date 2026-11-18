@@ -151,15 +151,17 @@ MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
 
     Exiv2::Image *image {nullptr};
 
+    const  Exiv2::ImageCtorParams icp {false, 0};
+
     switch (type)
     {
     case JPEG:
-        image = new Exiv2::JpegImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+		image = new Exiv2::JpegImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), icp);
         break;
 
     case NONE:		// we'll just drop through until we find something that works
     case CR2:
-        image = new Exiv2::Cr2Image (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+		image = new Exiv2::Cr2Image (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), icp);
         if (image->good())
             expected_type = CR2;
 
@@ -169,7 +171,7 @@ MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
             break;
 
     case BMFF:
-        image = new Exiv2::BmffImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+        image = new Exiv2::BmffImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), icp);
         if (image->good())
             expected_type = BMFF;
 
@@ -179,7 +181,7 @@ MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
             break;
 
     case ORF:
-        image = new Exiv2::OrfImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+        image = new Exiv2::OrfImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), icp);
         if (image->good())
             expected_type = ORF;
 
@@ -189,7 +191,7 @@ MetadataExiv2::MetadataExiv2 (const void *data, size_t size)
             break;
 
     case TIFF:
-        image = new Exiv2::TiffImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), false);
+        image = new Exiv2::TiffImage (std::make_unique<Exiv2::MemIo> ((const Exiv2::byte *) data, size), icp);
         if (image->good())
             expected_type = TIFF;
     }

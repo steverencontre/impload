@@ -24,6 +24,8 @@
 #include <QFileDialog>
 
 #include <fcntl.h>
+#include <unistd.h>
+
 
 #include "Folder.h"
 #include "Metadata.h"

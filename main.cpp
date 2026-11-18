@@ -41,7 +41,7 @@ int main (int argc, char *argv[])
 	parser.addOptions
 	({
 		{{"t", "timeshift"}, "Add hours to EXIF timestamp (may be fractional or negative)", "timeshift"},
-		{{"s", "since"}, "Only add photos from this date/time (ISO format, UTC or 0=today, -N since N days ago) onwards", "since"}
+		{{"s", "since"}, "Only add photos from this date/time onward (ISO format UTC or 0=today, -N since N days ago)", "since"}
 	});
 
 	parser.process(a);
@@ -58,9 +58,12 @@ int main (int argc, char *argv[])
 
 		QDateTime s;
 
-		int n = t.toInt();
-		if (n <= 0)
-			s = QDateTime {QDate::currentDate().addDays (n), {}};
+		if (t[0] == '-' || t[0] == '0')
+		{
+			int n = t.toInt();
+			if (n <= 0)
+				s = QDateTime {QDate::currentDate().addDays (n), {}};
+		}
 		else
 			s = QDateTime::fromString (t, Qt::ISODate);
 

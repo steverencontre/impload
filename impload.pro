@@ -14,6 +14,8 @@ CONFIG += c++latest
 TARGET = impload
 TEMPLATE = app
 
+LIBS += -L/usr/local/lib64
+
 LIBS += -lgphoto2 -lgphoto2_port -lexiv2
 LIBS += -lmediainfo
 LIBS += -lyaml-cpp
